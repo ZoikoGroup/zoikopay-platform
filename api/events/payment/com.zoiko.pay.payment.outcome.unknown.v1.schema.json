@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zoikopay:schema:com.zoiko.pay.payment.outcome.unknown.v1",
+  "title": "com.zoiko.pay.payment.outcome.unknown.v1",
+  "description": "Unresolved effect; BC-04 must inquire under the original identity, never blindly replay (06-01 \u00a77.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payment_intent_id",
+    "operation_id",
+    "operation_kind",
+    "attempt_id",
+    "provider_instruction_key",
+    "environment"
+  ],
+  "properties": {
+    "payment_intent_id": {
+      "type": "string",
+      "pattern": "^pi_[0-9a-f]{32}$"
+    },
+    "operation_id": {
+      "type": "string",
+      "pattern": "^op_[0-9a-f]{32}$"
+    },
+    "operation_kind": {
+      "type": "string",
+      "enum": [
+        "CONFIRM",
+        "CAPTURE",
+        "VOID"
+      ]
+    },
+    "attempt_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "provider_instruction_key": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "provider_account_id": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "TEST",
+        "LIVE"
+      ]
+    }
+  }
+}

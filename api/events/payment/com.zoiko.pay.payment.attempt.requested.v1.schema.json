@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zoikopay:schema:com.zoiko.pay.payment.attempt.requested.v1",
+  "title": "com.zoiko.pay.payment.attempt.requested.v1",
+  "description": "Durable effectful command for BC-04; dispatch once under provider_instruction_key (06-01 \u00a77.1). Not a state fact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payment_intent_id",
+    "operation_id",
+    "operation_kind",
+    "attempt_id",
+    "provider_instruction_key",
+    "economic_effect_id",
+    "amount_minor",
+    "currency",
+    "capture_method",
+    "environment"
+  ],
+  "properties": {
+    "payment_intent_id": {
+      "type": "string",
+      "pattern": "^pi_[0-9a-f]{32}$"
+    },
+    "operation_id": {
+      "type": "string",
+      "pattern": "^op_[0-9a-f]{32}$"
+    },
+    "operation_kind": {
+      "type": "string",
+      "enum": [
+        "CONFIRM",
+        "CAPTURE",
+        "VOID"
+      ]
+    },
+    "attempt_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "provider_instruction_key": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "economic_effect_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount_minor": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)$",
+      "description": "Integer minor units as a decimal string (ADR 0001 \u00a73)."
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "EUR",
+        "GBP",
+        "USD"
+      ]
+    },
+    "capture_method": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "manual"
+      ]
+    },
+    "payment_method_token_ref": {
+      "type": "string",
+      "description": "Vault token reference only; never card data."
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "TEST",
+        "LIVE"
+      ]
+    }
+  }
+}

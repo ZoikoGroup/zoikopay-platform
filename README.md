@@ -5,8 +5,10 @@ Payment orchestration platform for the merchant pilot.
 **Status: skeleton plus shared financial foundation.** The six programs
 start, connect to their dependencies and report health. The shared platform
 (money, IDs, idempotency, outbox/inbox, tenant row-level security, migration
-runner) is built and tested (ADR 0005). There is no business logic, no
-module tables and no API endpoints yet.
+runner) is built and tested (ADR 0005). The Payments module (BC-03: intent
+lifecycle, unknown-outcome handling, recovery, private command API) is built
+and tested (ADR 0006) but not deployed: its API is not mounted until service
+authentication exists, and provider connectivity (BC-04) is not built.
 
 ## 1. Prerequisites (one time)
 

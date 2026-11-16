@@ -13,6 +13,8 @@ IDs to files with `docs/spec/INDEX.md` and cite specs by ID (e.g. "06-01").
   one schema and one DB role per context, PostgreSQL outbox (no broker).
 - `docs/adr/0005-financial-data-foundation.md`: IDs (internal UUIDv7 vs public `pi_…`), money limits
   and no-rounding rule, idempotency/outbox/inbox, tenant RLS via `db.InTenantTx`, migration runner.
+- `docs/adr/0006-payments-module.md`: BC-03 reducer is the only state authority; DB guards back it; events use
+  only 04-06 registry names; BC-04 owns provider calls; payment HTTP API is not mounted until D1→D2 auth exists.
 - Unresolved conflicts go in `docs/OPEN_QUESTIONS.md`, not into code silently.
 
 ## Layout

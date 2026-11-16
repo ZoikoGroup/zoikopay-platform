@@ -6,12 +6,438 @@
 package executionapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for CreatePaymentIntentRequestCaptureMethod.
+const (
+	CreatePaymentIntentRequestCaptureMethodAutomatic CreatePaymentIntentRequestCaptureMethod = "automatic"
+	CreatePaymentIntentRequestCaptureMethodManual    CreatePaymentIntentRequestCaptureMethod = "manual"
+)
+
+// Valid indicates whether the value is a known member of the CreatePaymentIntentRequestCaptureMethod enum.
+func (e CreatePaymentIntentRequestCaptureMethod) Valid() bool {
+	switch e {
+	case CreatePaymentIntentRequestCaptureMethodAutomatic:
+		return true
+	case CreatePaymentIntentRequestCaptureMethodManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Currency.
+const (
+	EUR Currency = "EUR"
+	GBP Currency = "GBP"
+	USD Currency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the Currency enum.
+func (e Currency) Valid() bool {
+	switch e {
+	case EUR:
+		return true
+	case GBP:
+		return true
+	case USD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationKind.
+const (
+	Capture OperationKind = "capture"
+	Confirm OperationKind = "confirm"
+	Void    OperationKind = "void"
+)
+
+// Valid indicates whether the value is a known member of the OperationKind enum.
+func (e OperationKind) Valid() bool {
+	switch e {
+	case Capture:
+		return true
+	case Confirm:
+		return true
+	case Void:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationObject.
+const (
+	OperationObjectOperation OperationObject = "operation"
+)
+
+// Valid indicates whether the value is a known member of the OperationObject enum.
+func (e OperationObject) Valid() bool {
+	switch e {
+	case OperationObjectOperation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationResolution.
+const (
+	OperationResolutionCertainNegative OperationResolution = "certain_negative"
+	OperationResolutionCertainPositive OperationResolution = "certain_positive"
+	OperationResolutionConflicted      OperationResolution = "conflicted"
+	OperationResolutionPending         OperationResolution = "pending"
+	OperationResolutionUnknown         OperationResolution = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OperationResolution enum.
+func (e OperationResolution) Valid() bool {
+	switch e {
+	case OperationResolutionCertainNegative:
+		return true
+	case OperationResolutionCertainPositive:
+		return true
+	case OperationResolutionConflicted:
+		return true
+	case OperationResolutionPending:
+		return true
+	case OperationResolutionUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentIntentCaptureMethod.
+const (
+	PaymentIntentCaptureMethodAutomatic PaymentIntentCaptureMethod = "automatic"
+	PaymentIntentCaptureMethodManual    PaymentIntentCaptureMethod = "manual"
+)
+
+// Valid indicates whether the value is a known member of the PaymentIntentCaptureMethod enum.
+func (e PaymentIntentCaptureMethod) Valid() bool {
+	switch e {
+	case PaymentIntentCaptureMethodAutomatic:
+		return true
+	case PaymentIntentCaptureMethodManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentIntentNextActionType.
+const (
+	CustomerAction PaymentIntentNextActionType = "customer_action"
+)
+
+// Valid indicates whether the value is a known member of the PaymentIntentNextActionType enum.
+func (e PaymentIntentNextActionType) Valid() bool {
+	switch e {
+	case CustomerAction:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentIntentObject.
+const (
+	PaymentIntentObjectPaymentIntent PaymentIntentObject = "payment_intent"
+)
+
+// Valid indicates whether the value is a known member of the PaymentIntentObject enum.
+func (e PaymentIntentObject) Valid() bool {
+	switch e {
+	case PaymentIntentObjectPaymentIntent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentIntentOperationResolution.
+const (
+	PaymentIntentOperationResolutionCertainNegative PaymentIntentOperationResolution = "certain_negative"
+	PaymentIntentOperationResolutionCertainPositive PaymentIntentOperationResolution = "certain_positive"
+	PaymentIntentOperationResolutionConflicted      PaymentIntentOperationResolution = "conflicted"
+	PaymentIntentOperationResolutionPending         PaymentIntentOperationResolution = "pending"
+	PaymentIntentOperationResolutionUnknown         PaymentIntentOperationResolution = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the PaymentIntentOperationResolution enum.
+func (e PaymentIntentOperationResolution) Valid() bool {
+	switch e {
+	case PaymentIntentOperationResolutionCertainNegative:
+		return true
+	case PaymentIntentOperationResolutionCertainPositive:
+		return true
+	case PaymentIntentOperationResolutionConflicted:
+		return true
+	case PaymentIntentOperationResolutionPending:
+		return true
+	case PaymentIntentOperationResolutionUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentIntentStatus.
+const (
+	Canceled               PaymentIntentStatus = "canceled"
+	Expired                PaymentIntentStatus = "expired"
+	Failed                 PaymentIntentStatus = "failed"
+	PartiallyCaptured      PaymentIntentStatus = "partially_captured"
+	Processing             PaymentIntentStatus = "processing"
+	RequiresCapture        PaymentIntentStatus = "requires_capture"
+	RequiresConfirmation   PaymentIntentStatus = "requires_confirmation"
+	RequiresCustomerAction PaymentIntentStatus = "requires_customer_action"
+	RequiresPaymentMethod  PaymentIntentStatus = "requires_payment_method"
+	Succeeded              PaymentIntentStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the PaymentIntentStatus enum.
+func (e PaymentIntentStatus) Valid() bool {
+	switch e {
+	case Canceled:
+		return true
+	case Expired:
+		return true
+	case Failed:
+		return true
+	case PartiallyCaptured:
+		return true
+	case Processing:
+		return true
+	case RequiresCapture:
+		return true
+	case RequiresConfirmation:
+		return true
+	case RequiresCustomerAction:
+		return true
+	case RequiresPaymentMethod:
+		return true
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// AmountMinor Integer minor units as a decimal string (ADR 0001 §3); at most 15 digits per transaction (Q26).
+type AmountMinor = string
+
+// CancelRequest defines model for CancelRequest.
+type CancelRequest struct {
+	ExpectedRevision *int `json:"expected_revision,omitempty"`
+}
+
+// CaptureRequest defines model for CaptureRequest.
+type CaptureRequest struct {
+	// AmountMinor Integer minor units as a decimal string (ADR 0001 §3); at most 15 digits per transaction (Q26).
+	AmountMinor      AmountMinor `json:"amount_minor"`
+	ExpectedRevision *int        `json:"expected_revision,omitempty"`
+}
+
+// ConfirmRequest defines model for ConfirmRequest.
+type ConfirmRequest struct {
+	ExpectedRevision *int `json:"expected_revision,omitempty"`
+
+	// PaymentMethodToken New method after a retryable decline.
+	PaymentMethodToken *string `json:"payment_method_token,omitempty"`
+}
+
+// CreatePaymentIntentRequest defines model for CreatePaymentIntentRequest.
+type CreatePaymentIntentRequest struct {
+	// AmountMinor Integer minor units as a decimal string (ADR 0001 §3); at most 15 digits per transaction (Q26).
+	AmountMinor       AmountMinor                             `json:"amount_minor"`
+	CaptureMethod     CreatePaymentIntentRequestCaptureMethod `json:"capture_method"`
+	Currency          Currency                                `json:"currency"`
+	ExpiresAt         *time.Time                              `json:"expires_at,omitempty"`
+	MerchantReference *string                                 `json:"merchant_reference,omitempty"`
+
+	// PaymentMethodToken Vault token reference; never card data.
+	PaymentMethodToken string `json:"payment_method_token"`
+}
+
+// CreatePaymentIntentRequestCaptureMethod defines model for CreatePaymentIntentRequest.CaptureMethod.
+type CreatePaymentIntentRequestCaptureMethod string
+
+// Currency defines model for Currency.
+type Currency string
+
+// Operation defines model for Operation.
+type Operation struct {
+	AmountMinor     string              `json:"amount_minor"`
+	CreatedAt       time.Time           `json:"created_at"`
+	Currency        Currency            `json:"currency"`
+	Id              string              `json:"id"`
+	Kind            OperationKind       `json:"kind"`
+	Object          OperationObject     `json:"object"`
+	PaymentIntentId string              `json:"payment_intent_id"`
+	Resolution      OperationResolution `json:"resolution"`
+	ResolvedAt      *time.Time          `json:"resolved_at,omitempty"`
+}
+
+// OperationKind defines model for Operation.Kind.
+type OperationKind string
+
+// OperationObject defines model for Operation.Object.
+type OperationObject string
+
+// OperationResolution defines model for Operation.Resolution.
+type OperationResolution string
+
+// PaymentIntent defines model for PaymentIntent.
+type PaymentIntent struct {
+	AmountAuthorizedMinor string                     `json:"amount_authorized_minor"`
+	AmountCapturableMinor string                     `json:"amount_capturable_minor"`
+	AmountCapturedMinor   string                     `json:"amount_captured_minor"`
+	AmountMinor           string                     `json:"amount_minor"`
+	CancellationRequested bool                       `json:"cancellation_requested"`
+	CaptureMethod         PaymentIntentCaptureMethod `json:"capture_method"`
+	CreatedAt             time.Time                  `json:"created_at"`
+	Currency              Currency                   `json:"currency"`
+	ExpiresAt             *time.Time                 `json:"expires_at,omitempty"`
+	Id                    string                     `json:"id"`
+	LatestOperationId     *string                    `json:"latest_operation_id"`
+	MerchantReference     *string                    `json:"merchant_reference,omitempty"`
+	NextAction            *struct {
+		ExpiresAt *time.Time                  `json:"expires_at,omitempty"`
+		Ref       string                      `json:"ref"`
+		Type      PaymentIntentNextActionType `json:"type"`
+	} `json:"next_action"`
+	Object              PaymentIntentObject               `json:"object"`
+	OperationResolution *PaymentIntentOperationResolution `json:"operation_resolution"`
+	Revision            int                               `json:"revision"`
+	Status              PaymentIntentStatus               `json:"status"`
+	UpdatedAt           time.Time                         `json:"updated_at"`
+}
+
+// PaymentIntentCaptureMethod defines model for PaymentIntent.CaptureMethod.
+type PaymentIntentCaptureMethod string
+
+// PaymentIntentNextActionType defines model for PaymentIntent.NextAction.Type.
+type PaymentIntentNextActionType string
+
+// PaymentIntentObject defines model for PaymentIntent.Object.
+type PaymentIntentObject string
+
+// PaymentIntentOperationResolution defines model for PaymentIntent.OperationResolution.
+type PaymentIntentOperationResolution string
+
+// PaymentIntentStatus defines model for PaymentIntent.Status.
+type PaymentIntentStatus string
+
+// PaymentIntentPage defines model for PaymentIntentPage.
+type PaymentIntentPage struct {
+	Data       []PaymentIntent `json:"data"`
+	HasMore    bool            `json:"has_more"`
+	NextCursor *string         `json:"next_cursor"`
+}
+
+// Problem defines model for Problem.
+type Problem struct {
+	Code   string  `json:"code"`
+	Detail *string `json:"detail,omitempty"`
+	Errors *[]struct {
+		Field  string `json:"field"`
+		Reason string `json:"reason"`
+	} `json:"errors,omitempty"`
+	OperationId *string `json:"operation_id,omitempty"`
+	RequestId   *string `json:"request_id,omitempty"`
+	Retryable   *bool   `json:"retryable,omitempty"`
+	Status      int     `json:"status"`
+	Title       string  `json:"title"`
+	Type        string  `json:"type"`
+}
+
+// IdempotencyKey defines model for IdempotencyKey.
+type IdempotencyKey = string
+
+// PaymentIntentId defines model for PaymentIntentId.
+type PaymentIntentId = string
+
+// OperationAccepted defines model for OperationAccepted.
+type OperationAccepted = Operation
+
+// ListPaymentIntentsParams defines parameters for ListPaymentIntents.
+type ListPaymentIntentsParams struct {
+	// Cursor Opaque cursor from next_cursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size, 1 to 100.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreatePaymentIntentParams defines parameters for CreatePaymentIntent.
+type CreatePaymentIntentParams struct {
+	// IdempotencyKey Quoted UUID (RFC 9651 string item), one per economic command (04-08 §4).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// CancelPaymentIntentParams defines parameters for CancelPaymentIntent.
+type CancelPaymentIntentParams struct {
+	// IdempotencyKey Quoted UUID (RFC 9651 string item), one per economic command (04-08 §4).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// CapturePaymentIntentParams defines parameters for CapturePaymentIntent.
+type CapturePaymentIntentParams struct {
+	// IdempotencyKey Quoted UUID (RFC 9651 string item), one per economic command (04-08 §4).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ConfirmPaymentIntentParams defines parameters for ConfirmPaymentIntent.
+type ConfirmPaymentIntentParams struct {
+	// IdempotencyKey Quoted UUID (RFC 9651 string item), one per economic command (04-08 §4).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// CreatePaymentIntentJSONRequestBody defines body for CreatePaymentIntent for application/json ContentType.
+type CreatePaymentIntentJSONRequestBody = CreatePaymentIntentRequest
+
+// CancelPaymentIntentJSONRequestBody defines body for CancelPaymentIntent for application/json ContentType.
+type CancelPaymentIntentJSONRequestBody = CancelRequest
+
+// CapturePaymentIntentJSONRequestBody defines body for CapturePaymentIntent for application/json ContentType.
+type CapturePaymentIntentJSONRequestBody = CaptureRequest
+
+// ConfirmPaymentIntentJSONRequestBody defines body for ConfirmPaymentIntent for application/json ContentType.
+type ConfirmPaymentIntentJSONRequestBody = ConfirmRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetOperation Get an operation
+	// (GET /v1/operations/{operation_id})
+	GetOperation(w http.ResponseWriter, r *http.Request, operationId string)
+	// ListPaymentIntents List payment intents
+	// (GET /v1/payment_intents)
+	ListPaymentIntents(w http.ResponseWriter, r *http.Request, params ListPaymentIntentsParams)
+	// CreatePaymentIntent Create a payment intent
+	// (POST /v1/payment_intents)
+	CreatePaymentIntent(w http.ResponseWriter, r *http.Request, params CreatePaymentIntentParams)
+	// GetPaymentIntent Get a payment intent
+	// (GET /v1/payment_intents/{payment_intent_id})
+	GetPaymentIntent(w http.ResponseWriter, r *http.Request, paymentIntentId PaymentIntentId)
+	// CancelPaymentIntent Cancel a payment intent
+	// (POST /v1/payment_intents/{payment_intent_id}/cancel)
+	CancelPaymentIntent(w http.ResponseWriter, r *http.Request, paymentIntentId PaymentIntentId, params CancelPaymentIntentParams)
+	// CapturePaymentIntent Capture an authorized payment
+	// (POST /v1/payment_intents/{payment_intent_id}/capture)
+	CapturePaymentIntent(w http.ResponseWriter, r *http.Request, paymentIntentId PaymentIntentId, params CapturePaymentIntentParams)
+	// ConfirmPaymentIntent Confirm a payment intent
+	// (POST /v1/payment_intents/{payment_intent_id}/confirm)
+	ConfirmPaymentIntent(w http.ResponseWriter, r *http.Request, paymentIntentId PaymentIntentId, params ConfirmPaymentIntentParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -22,6 +448,311 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetOperation operation middleware
+func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "operation_id" -------------
+	var operationId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operation_id", r.PathValue("operation_id"), &operationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operation_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOperation(w, r, operationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPaymentIntents operation middleware
+func (siw *ServerInterfaceWrapper) ListPaymentIntents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPaymentIntentsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPaymentIntents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePaymentIntent operation middleware
+func (siw *ServerInterfaceWrapper) CreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreatePaymentIntentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePaymentIntent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPaymentIntent operation middleware
+func (siw *ServerInterfaceWrapper) GetPaymentIntent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "payment_intent_id" -------------
+	var paymentIntentId PaymentIntentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "payment_intent_id", r.PathValue("payment_intent_id"), &paymentIntentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "payment_intent_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPaymentIntent(w, r, paymentIntentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelPaymentIntent operation middleware
+func (siw *ServerInterfaceWrapper) CancelPaymentIntent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "payment_intent_id" -------------
+	var paymentIntentId PaymentIntentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "payment_intent_id", r.PathValue("payment_intent_id"), &paymentIntentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "payment_intent_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelPaymentIntentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelPaymentIntent(w, r, paymentIntentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CapturePaymentIntent operation middleware
+func (siw *ServerInterfaceWrapper) CapturePaymentIntent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "payment_intent_id" -------------
+	var paymentIntentId PaymentIntentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "payment_intent_id", r.PathValue("payment_intent_id"), &paymentIntentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "payment_intent_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CapturePaymentIntentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CapturePaymentIntent(w, r, paymentIntentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmPaymentIntent operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmPaymentIntent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "payment_intent_id" -------------
+	var paymentIntentId PaymentIntentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "payment_intent_id", r.PathValue("payment_intent_id"), &paymentIntentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "payment_intent_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfirmPaymentIntentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmPaymentIntent(w, r, paymentIntentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 type UnescapedCookieParamError struct {
 	ParamName string
@@ -136,6 +867,20 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 	}
+
+	wrapper := ServerInterfaceWrapper{
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
+	}
+
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/payment_intents", wrapper.ListPaymentIntents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/payment_intents", wrapper.CreatePaymentIntent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/payment_intents/{payment_intent_id}", wrapper.GetPaymentIntent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/payment_intents/{payment_intent_id}/confirm", wrapper.ConfirmPaymentIntent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/payment_intents/{payment_intent_id}/capture", wrapper.CapturePaymentIntent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/payment_intents/{payment_intent_id}/cancel", wrapper.CancelPaymentIntent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/operations/{operation_id}", wrapper.GetOperation)
 
 	return m
 }

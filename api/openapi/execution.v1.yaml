@@ -1,10 +1,14 @@
-# Placeholder contract (M0 skeleton). Operations are added in M2 under
-# ADR 0001: snake_case paths, amount_minor as a decimal string, RFC 9457 errors.
+# Private command API of deployable D2 execution (03-03 §4: payment-command-api,
+# called by D1 api-edge with caller identity and tenant/merchant/cell claims).
+# Payment intent paths follow 04-02 §4; wire rules follow ADR 0001 (amounts as
+# decimal strings, snake_case, lower-case enum values; see OPEN_QUESTIONS Q1, Q29).
 openapi: 3.1.0
 info:
   title: ZoikoPay Execution internal API
-  version: 0.0.0
-  description: Internal API of deployable D2 execution (payment lifecycle, connectors).
+  version: 1.0.0
+  description: >-
+    Payment intent lifecycle (BC-03, spec 06-01). Every effectful POST requires an
+    Idempotency-Key (04-08). A 2xx response never means bank settlement (06-01 §10).
   contact:
     name: ZoikoPay Engineering
   license:
@@ -13,6 +17,319 @@ info:
 servers:
   - url: http://localhost:8081
 tags:
-  - name: health
-    description: Placeholder tag until M2 adds operations.
-paths: {}
+  - name: payment_intents
+    description: Payment intent lifecycle (06-01).
+  - name: operations
+    description: Effectful operation receipts.
+paths:
+  /v1/payment_intents:
+    post:
+      operationId: createPaymentIntent
+      tags: [payment_intents]
+      summary: Create a payment intent
+      description: Creates an intent with a vault token (04-02 §6.1); no provider effect.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentIntentRequest'
+      responses:
+        '201':
+          description: Intent created (not an executed payment).
+          headers:
+            Location:
+              description: URL of the new intent.
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentIntent'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listPaymentIntents
+      tags: [payment_intents]
+      summary: List payment intents
+      description: Scoped cursor page, at most 100 per page (04-02 §6.6).
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque cursor from next_cursor.
+          schema: {type: string}
+        - name: limit
+          in: query
+          required: false
+          description: Page size, 1 to 100.
+          schema: {type: integer, minimum: 1, maximum: 100}
+      responses:
+        '200':
+          description: One page.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentIntentPage'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /v1/payment_intents/{payment_intent_id}:
+    get:
+      operationId: getPaymentIntent
+      tags: [payment_intents]
+      summary: Get a payment intent
+      description: Current scoped snapshot; other tenants' intents are a masked 404.
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+      responses:
+        '200':
+          description: Current state.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentIntent'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /v1/payment_intents/{payment_intent_id}/confirm:
+    post:
+      operationId: confirmPaymentIntent
+      tags: [payment_intents]
+      summary: Confirm a payment intent
+      description: Admits one confirm operation (06-01 CONFIRM); outcome arrives asynchronously.
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfirmRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/payment_intents/{payment_intent_id}/capture:
+    post:
+      operationId: capturePaymentIntent
+      tags: [payment_intents]
+      summary: Capture an authorized payment
+      description: Full capture of a manual-capture authorization; partial capture is disabled (06-01 §7.4).
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CaptureRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/payment_intents/{payment_intent_id}/cancel:
+    post:
+      operationId: cancelPaymentIntent
+      tags: [payment_intents]
+      summary: Cancel a payment intent
+      description: >-
+        Before dispatch: canceled now (200). Authorized: a void is sent (202). In flight:
+        the request is recorded and the intent stays processing until proof (06-01 §8.2).
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CancelRequest'}
+      responses:
+        '200':
+          description: Intent canceled or cancellation recorded.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentIntent'}
+        '202': {$ref: '#/components/responses/OperationAccepted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /v1/operations/{operation_id}:
+    get:
+      operationId: getOperation
+      tags: [operations]
+      summary: Get an operation
+      description: Operation receipt and resolution (pending, unknown, certain_positive, certain_negative, conflicted).
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          description: Operation id (op_...).
+          schema: {type: string, pattern: '^op_[0-9a-f]{32}$'}
+      responses:
+        '200':
+          description: Operation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Operation'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Quoted UUID (RFC 9651 string item), one per economic command (04-08 §4).
+      schema: {type: string, pattern: '^"[0-9a-fA-F-]{36}"$'}
+    PaymentIntentId:
+      name: payment_intent_id
+      in: path
+      required: true
+      description: Payment intent id (pi_...).
+      schema: {type: string, pattern: '^pi_[0-9a-f]{32}$'}
+  responses:
+    Problem:
+      description: RFC 9457 problem details (04-01 §8).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    OperationAccepted:
+      description: Operation admitted; outcome is asynchronous and not bank settlement.
+      headers:
+        Location:
+          description: URL of the operation.
+          schema: {type: string}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Operation'}
+  schemas:
+    AmountMinor:
+      type: string
+      description: Integer minor units as a decimal string (ADR 0001 §3); at most 15 digits per transaction (Q26).
+      pattern: '^[1-9][0-9]{0,14}$'
+    Currency:
+      type: string
+      enum: [EUR, GBP, USD]
+    CreatePaymentIntentRequest:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency, capture_method, payment_method_token]
+      properties:
+        amount_minor: {$ref: '#/components/schemas/AmountMinor'}
+        currency: {$ref: '#/components/schemas/Currency'}
+        capture_method: {type: string, enum: [automatic, manual]}
+        payment_method_token: {type: string, minLength: 1, maxLength: 256, description: Vault token reference; never card data.}
+        merchant_reference: {type: string, minLength: 1, maxLength: 128}
+        expires_at: {type: string, format: date-time}
+    ConfirmRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        payment_method_token: {type: string, minLength: 1, maxLength: 256, description: New method after a retryable decline.}
+        expected_revision: {type: integer, minimum: 1}
+    CaptureRequest:
+      type: object
+      additionalProperties: false
+      required: [amount_minor]
+      properties:
+        amount_minor: {$ref: '#/components/schemas/AmountMinor'}
+        expected_revision: {type: integer, minimum: 1}
+    CancelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_revision: {type: integer, minimum: 1}
+    PaymentIntent:
+      type: object
+      required: [id, object, status, amount_minor, currency, capture_method, amount_authorized_minor,
+        amount_captured_minor, amount_capturable_minor, latest_operation_id, operation_resolution, next_action,
+        cancellation_requested, revision, created_at, updated_at]
+      properties:
+        id: {type: string}
+        object: {type: string, enum: [payment_intent]}
+        status:
+          type: string
+          enum: [requires_payment_method, requires_confirmation, requires_customer_action, processing,
+            requires_capture, partially_captured, succeeded, failed, canceled, expired]
+        amount_minor: {type: string}
+        currency: {$ref: '#/components/schemas/Currency'}
+        capture_method: {type: string, enum: [automatic, manual]}
+        amount_authorized_minor: {type: string}
+        amount_captured_minor: {type: string}
+        amount_capturable_minor: {type: string}
+        latest_operation_id: {type: [string, 'null']}
+        operation_resolution:
+          oneOf:
+            - type: 'null'
+            - type: string
+              enum: [pending, unknown, certain_positive, certain_negative, conflicted]
+        merchant_reference: {type: string}
+        next_action:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [type, ref]
+              properties:
+                type: {type: string, enum: [customer_action]}
+                ref: {type: string}
+                expires_at: {type: string, format: date-time}
+        cancellation_requested: {type: boolean}
+        revision: {type: integer}
+        expires_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    PaymentIntentPage:
+      type: object
+      required: [data, has_more, next_cursor]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/PaymentIntent'}
+        has_more: {type: boolean}
+        next_cursor: {type: [string, 'null']}
+    Operation:
+      type: object
+      required: [id, object, kind, resolution, payment_intent_id, amount_minor, currency, created_at]
+      properties:
+        id: {type: string}
+        object: {type: string, enum: [operation]}
+        kind: {type: string, enum: [confirm, capture, void]}
+        resolution: {type: string, enum: [pending, unknown, certain_positive, certain_negative, conflicted]}
+        payment_intent_id: {type: string}
+        amount_minor: {type: string}
+        currency: {$ref: '#/components/schemas/Currency'}
+        created_at: {type: string, format: date-time}
+        resolved_at: {type: string, format: date-time}
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code: {type: string}
+        request_id: {type: string}
+        operation_id: {type: string}
+        retryable: {type: boolean}
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, reason]
+            properties:
+              field: {type: string}
+              reason: {type: string}

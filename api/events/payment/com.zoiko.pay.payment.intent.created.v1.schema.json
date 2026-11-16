@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zoikopay:schema:com.zoiko.pay.payment.intent.created.v1",
+  "title": "com.zoiko.pay.payment.intent.created.v1",
+  "description": "Intent created only; no provider effect (06-01 \u00a711.1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payment_intent_id",
+    "merchant_id",
+    "amount_minor",
+    "currency",
+    "capture_method",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "payment_intent_id": {
+      "type": "string",
+      "pattern": "^pi_[0-9a-f]{32}$"
+    },
+    "merchant_id": {
+      "type": "string"
+    },
+    "amount_minor": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)$",
+      "description": "Integer minor units as a decimal string (ADR 0001 \u00a73)."
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "EUR",
+        "GBP",
+        "USD"
+      ]
+    },
+    "capture_method": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "manual"
+      ]
+    },
+    "status": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

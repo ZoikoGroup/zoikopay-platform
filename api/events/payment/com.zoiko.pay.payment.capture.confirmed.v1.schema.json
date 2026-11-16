@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zoikopay:schema:com.zoiko.pay.payment.capture.confirmed.v1",
+  "title": "com.zoiko.pay.payment.capture.confirmed.v1",
+  "description": "Verified capture or automatic-capture execution; BC-05 posts once per economic_effect_id. Not bank settlement (06-01 \u00a710).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payment_intent_id",
+    "operation_id",
+    "economic_effect_id",
+    "amount_minor",
+    "currency",
+    "observation_id"
+  ],
+  "properties": {
+    "payment_intent_id": {
+      "type": "string",
+      "pattern": "^pi_[0-9a-f]{32}$"
+    },
+    "operation_id": {
+      "type": "string",
+      "pattern": "^op_[0-9a-f]{32}$"
+    },
+    "economic_effect_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount_minor": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)$",
+      "description": "Integer minor units as a decimal string (ADR 0001 \u00a73)."
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "EUR",
+        "GBP",
+        "USD"
+      ]
+    },
+    "observation_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}
