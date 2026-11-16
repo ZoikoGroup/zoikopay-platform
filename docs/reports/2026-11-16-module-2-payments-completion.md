@@ -92,3 +92,28 @@ Changed: `sqlc.yaml` (payment module), `go.mod`/`go.sum` (+ `oapi-codegen/runtim
 - Each step is a separate CAS update inside one transaction. This is correct and atomic, but means N small updates per multi-step command. Measure under load before the pilot (02-04 budgets).
 - `work_schedule` is deliberately cross-tenant (identifiers only). Any future column added there must stay non-sensitive; review it as such.
 - Relay ordering holds a parked event's later versions. A parked `attempt.requested` stalls that payment until requeued, which is intended but needs runbooks (SRE).
+
+## 8. Review closure (2026-11-16)
+
+**Owner decision:** Payments implementation `251e46e` is approved as complete within its authorized scope, based on the reported test and verification evidence. The review is closed.
+
+**Implementation baseline (confirmed 2026-11-16):**
+
+| Item | Value |
+|---|---|
+| Payments baseline | `251e46e12b2a273cef4ff1d565c1e4e3d0d7b014` on `module-2-payments` (report `81dcc2f`; this closure note is docs only) |
+| Built on | Module 1 baseline `fdce54fc9dc10b124be2fd5b8f2d9e828022b4a2`; `internal/platform` and `cmd/migrate` unchanged between `fdce54f` and `251e46e` (empty diff) |
+| Security maintenance | `maintenance/go-toolchain-1.26.11` at `42d8cf7`, **not merged**. It must go through normal review and be merged before any deployment |
+
+**Migration status (confirmed with `make migrate-status` against the local stack):**
+
+| File | SHA-256 | Local stack | Production |
+|---|---|---|---|
+| `db/migrations/payment/00001_platform_tables.sql` | `7c846d3a27bda6fa006c25377b74b627490c13009d75c18e585111f16571f024` | pending (not applied) | not applied |
+| `db/migrations/payment/00002_payment_core.sql` | `87ab89afc1e76ae94317e89f886f264443d6636f291c211da78e02389ee9bffb` | pending (not applied) | not applied |
+
+These migrations stay unapplied until the payment schema is formally reviewed and approved. Only disposable Testcontainers databases have run them.
+
+**Outstanding owner decisions:** Q29–Q34 (section 5) remain open, as do Q1 and Q26–Q28. Behavior stays conservative: no invented event names, retry limits, escalation times, cancellation rules or authentication mechanism.
+
+**Not authorized:** Ledger (needs separate explicit instruction), refunds, the BC-04 connector, D1→D2 authentication and any other module. One module at a time; no parallel development, no scope expansion, no unapproved production changes.

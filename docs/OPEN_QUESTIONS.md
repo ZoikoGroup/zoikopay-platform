@@ -3,6 +3,13 @@
 Each question records a conflict or gap in the specs. Code follows the
 "Proposed" answer until an owner decides; the decision then goes into an ADR.
 
+**Payments review (closed 2026-11-16):** the owner approved Payments `251e46e`
+and confirmed that **Q29–Q34 stay open** as owner decisions. Until each is
+decided, the conservative "Proposed" behaviour stays in force: no invented event
+names (Q30), retry limits (Q31), escalation times or default expiry (Q32),
+cancellation rules (Q33) or authentication mechanism (Q34). Q1 and Q26–Q28 are
+also still open.
+
 | # | Question | Sources in conflict | Proposed | Needed by | Owner |
 |---|---|---|---|---|---|
 | Q1 | Is `amount_minor` a JSON string (`"1999"`) or a JSON integer (`1999`)? | 02-05 and 02-06 say string; 02-01, 01-05, 01-09 and 04-10 examples show integer | String (ADR 0001 §3) | M2 OpenAPI | CTO, Payments |

@@ -1,6 +1,6 @@
 # ADR 0006: Payments module (BC-03 Payment Intent & Lifecycle)
 
-- Status: **PROPOSED**; built for owner review on 2026-11-16 (Module 2). Not deployed.
+- Status: **PROPOSED**. Implementation `251e46e` was approved by the project owner on 2026-11-16 as complete within its authorized scope (review closed: [completion report §8](../reports/2026-11-16-module-2-payments-completion.md#8-review-closure-2026-11-16)). Not deployed. Q29–Q34 remain open owner decisions; the payment schema is not yet formally approved and its migrations are not applied anywhere.
 - Specs: 06-01 (lifecycle, authoritative), 04-02 (payments API), 04-08 (idempotency), 04-06 (events), 02-07 (unknown outcomes), 03-03 §3–4 (placement)
 - Builds on: ADR 0001, ADR 0002, ADR 0005 (Module 1, approved baseline `fdce54f`)
 - Related: OPEN_QUESTIONS Q1, Q26–Q28, Q29–Q34
