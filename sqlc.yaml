@@ -1,0 +1,16 @@
+# sqlc configuration (run by `make gen`). Placeholder for the M0 skeleton.
+#
+# sqlc refuses a module whose db/queries/<module>/ folder has no queries, so
+# no module is listed yet. When a module gets its first migration and query,
+# add an entry like this one (one per module, its own schema only, ADR 0002):
+#
+#   - engine: postgresql
+#     schema: db/migrations/payment
+#     queries: db/queries/payment
+#     gen:
+#       go:
+#         package: store
+#         out: internal/payment/store
+#         sql_package: pgx/v5
+version: "2"
+sql: []

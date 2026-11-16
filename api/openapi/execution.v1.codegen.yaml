@@ -1,0 +1,6 @@
+# oapi-codegen config for api/openapi/execution.v1.yaml (run by make gen).
+package: executionapi
+output: internal/apigen/executionapi/executionapi.gen.go
+generate:
+  models: true
+  std-http-server: true

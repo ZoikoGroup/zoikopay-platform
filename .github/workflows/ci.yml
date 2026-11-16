@@ -1,0 +1,115 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      - name: golangci-lint
+        run: make lint-go
+      - name: Spectral (OpenAPI)
+        run: make lint-openapi
+      - name: govulncheck
+        run: make vuln
+
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build all binaries
+        run: make build
+      - name: Import-boundary test (ADR 0002)
+        run: go test -count=1 ./internal/archtest/...
+      - name: Unit tests (race)
+        run: make test
+
+  integration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Integration tests (Testcontainers, race)
+        run: make test-integration
+
+  console:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        part: [backend, frontend]
+    defaults:
+      run:
+        working-directory: zoiko-pay-console/${{ matrix.part }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: zoiko-pay-console/${{ matrix.part }}/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  generated:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      - name: Generated code is fresh (sqlc diff, oapi-codegen, go mod tidy)
+        run: |
+          make tidy
+          make check-gen
+
+  compose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Local stack comes up healthy and migrations apply
+        run: |
+          make up
+          make migrate
+      - name: All six binaries start, report /healthz ok and shut down cleanly
+        run: make smoke
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose/compose.yaml logs --no-color
+      - name: Tear down
+        if: always()
+        run: make nuke

@@ -1,0 +1,17 @@
+/bin/
+*.test
+*.out
+coverage.*
+.DS_Store
+deploy/compose/.env
+.env
+*.pem
+*.key
+node_modules/
+zoiko-pay-console/*/dist/
+
+# Editors and local tool state
+.vscode/
+.idea/
+*.tsbuildinfo
+.claude/settings.local.json

@@ -1,0 +1,18 @@
+# Placeholder contract (M0 skeleton). Operations are added in M2 under
+# ADR 0001: snake_case paths, amount_minor as a decimal string, RFC 9457 errors.
+openapi: 3.1.0
+info:
+  title: ZoikoPay Governance internal API
+  version: 0.0.0
+  description: Internal API of deployable D4 governance (policy, risk, notifications).
+  contact:
+    name: ZoikoPay Engineering
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: http://localhost:8083
+tags:
+  - name: health
+    description: Placeholder tag until M2 adds operations.
+paths: {}

@@ -1,0 +1,104 @@
+# ZoikoPay local development stack. Local use only: every credential below
+# is a development default and must never be used in any shared environment.
+# Override any value in deploy/compose/.env (see .env.example).
+name: zoikopay
+# Every service has `restart: unless-stopped`, so the stack comes back by
+# itself when Docker restarts (Mac sleep, Docker update). `make down` stops it
+# for good.
+
+services:
+  postgres:
+    image: postgres:18.1-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zoikopay
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${ZP_PG_SUPER_PASSWORD:-local-dev-only-super}
+      ZP_MIGRATOR_PASSWORD: ${ZP_MIGRATOR_PASSWORD:-local-dev-only-migrator}
+      ZP_APP_PASSWORD: ${ZP_APP_PASSWORD:-local-dev-only-app}
+    ports:
+      - "${ZP_PG_PORT:-55432}:5432"
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zoikopay"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Temporal dev server (SQLite-backed). The durable workflow store for
+  # deployable D2 only (spec 03-03 §5.1). UI on http://localhost:8233.
+  temporal:
+    image: temporalio/temporal:1.5.1
+    restart: unless-stopped
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--namespace", "zoikopay-execution", "--db-filename", "/home/temporal/temporal.db"]
+    ports:
+      - "${ZP_TEMPORAL_PORT:-7233}:7233"
+      - "${ZP_TEMPORAL_UI_PORT:-8233}:8233"
+    volumes:
+      # The image runs as uid 1000 (temporal); only its home directory is
+      # writable, and Docker gives a new named volume that directory's owner.
+      - temporaldata:/home/temporal
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  # OIDC stand-in for Zoiko iD. Admin console on http://localhost:8180.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.7
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${ZP_KEYCLOAK_ADMIN_PASSWORD:-local-dev-only-admin}
+    ports:
+      - "${ZP_KEYCLOAK_PORT:-8180}:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # The image has no curl; probe the management port with bash's /dev/tcp.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  # S3-compatible evidence store. The upstream minio/minio images were
+  # withdrawn; this frozen build is a local stand-in only (OPEN_QUESTIONS Q9).
+  minio:
+    image: bitnamilegacy/minio:2025.7.23
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: zp-local
+      MINIO_ROOT_PASSWORD: ${ZP_MINIO_PASSWORD:-local-dev-only-minio}
+      MINIO_DEFAULT_BUCKETS: zp-evidence
+    ports:
+      - "${ZP_MINIO_PORT:-9000}:9000"
+      - "${ZP_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  # Grafana + Tempo + Loki + Prometheus (Mimir-compatible) + OTel Collector
+  # in one image. Grafana on http://localhost:3001 (3000 is often taken by other dev servers); OTLP on 4317 (gRPC) / 4318 (HTTP).
+  lgtm:
+    image: grafana/otel-lgtm:0.11.0
+    restart: unless-stopped
+    ports:
+      - "${ZP_GRAFANA_PORT:-3001}:3000"
+      - "${ZP_OTLP_GRPC_PORT:-4317}:4317"
+      - "${ZP_OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - lgtmdata:/data
+
+volumes:
+  pgdata:
+  temporaldata:
+  miniodata:
+  lgtmdata:

@@ -1,0 +1,6 @@
+# oapi-codegen config for api/openapi/governance.v1.yaml (run by make gen).
+package: governanceapi
+output: internal/apigen/governanceapi/governanceapi.gen.go
+generate:
+  models: true
+  std-http-server: true

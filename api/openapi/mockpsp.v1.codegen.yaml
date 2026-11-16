@@ -1,0 +1,6 @@
+# oapi-codegen config for api/openapi/mockpsp.v1.yaml (run by make gen).
+package: mockpspapi
+output: internal/apigen/mockpspapi/mockpspapi.gen.go
+generate:
+  models: true
+  std-http-server: true

@@ -1,0 +1,36 @@
+# Spectral ruleset for ZoikoPay public contracts (ADR 0001).
+extends:
+  - spectral:oas
+
+rules:
+  # 04-01: lowercase plural nouns in snake_case; path parameters in {braces}.
+  zp-paths-snake-case:
+    description: Path segments must be snake_case (ADR 0001, spec 04-01).
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^(/(v[0-9]+|[a-z][a-z0-9_]*|\\{[a-z][a-z0-9_]*\\}))+$"
+
+  # Rule 1: money is never a float. Nothing in the contract may be `type: number`.
+  zp-no-float:
+    description: Use integer minor units as a decimal string, never `number` (rule 1, spec 02-05).
+    severity: error
+    given: $..[?(@.type == 'number')]
+    then:
+      function: falsy
+      field: type
+
+  # Rule 2 (required Idempotency-Key on every money-moving POST) is enforced
+  # by a Go contract test in test/contract (M2), which resolves $refs exactly.
+
+  # 04-01 / RFC 9457 errors.
+  zp-problem-json:
+    description: 4xx/5xx responses must use application/problem+json (RFC 9457).
+    severity: error
+    given: $.paths[*][*].responses[?(@property.match(/^[45]/))].content
+    then:
+      field: application/problem+json
+      function: truthy

@@ -1,0 +1,377 @@
+{
+  "realm": "zoikopay",
+  "displayName": "ZoikoPay local (Zoiko iD stand-in)",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 300,
+  "clients": [
+    {
+      "clientId": "zoikopay-gateway",
+      "name": "ZoikoPay gateway (D1) resource server",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-only-gateway-secret"
+    },
+    {
+      "clientId": "zoikopay-console",
+      "name": "Zoiko Pay Admin Console (local development)",
+      "description": "Confidential client for the console backend. The console's own sign-in form posts to the backend, which checks the password here (direct access grant, server to server only).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-only-console-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {}
+    },
+    {
+      "clientId": "zoikopay-console-admin",
+      "name": "Zoiko Pay console account service (local development)",
+      "description": "Service account used by the console backend only to create accounts and set passwords. No browser login.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-only-account-admin-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "users": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "username": "super.admin",
+      "enabled": true,
+      "email": "super.admin@example.test",
+      "emailVerified": true,
+      "firstName": "Avery",
+      "lastName": "Stone",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "username": "ops.agent",
+      "enabled": true,
+      "email": "ops.agent@example.test",
+      "emailVerified": true,
+      "firstName": "Rowan",
+      "lastName": "Hale",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "username": "fin.controller.a",
+      "enabled": true,
+      "email": "fin.controller.a@example.test",
+      "emailVerified": true,
+      "firstName": "Jordan",
+      "lastName": "Pike",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "username": "fin.controller.b",
+      "enabled": true,
+      "email": "fin.controller.b@example.test",
+      "emailVerified": true,
+      "firstName": "Sam",
+      "lastName": "Okafor",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "username": "risk.analyst",
+      "enabled": true,
+      "email": "risk.analyst@example.test",
+      "emailVerified": true,
+      "firstName": "Morgan",
+      "lastName": "Reyes",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "username": "support.agent",
+      "enabled": true,
+      "email": "support.agent@example.test",
+      "emailVerified": true,
+      "firstName": "Casey",
+      "lastName": "Lund",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "username": "security.officer",
+      "enabled": true,
+      "email": "security.officer@example.test",
+      "emailVerified": true,
+      "firstName": "Riley",
+      "lastName": "Ward",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "username": "iam.admin",
+      "enabled": true,
+      "email": "iam.admin@example.test",
+      "emailVerified": true,
+      "firstName": "Quinn",
+      "lastName": "Abara",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000018",
+      "username": "iam.admin.b",
+      "enabled": true,
+      "email": "iam.admin.b@example.test",
+      "emailVerified": true,
+      "firstName": "Jules",
+      "lastName": "Navarro",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000009",
+      "username": "sre.oncall",
+      "enabled": true,
+      "email": "sre.oncall@example.test",
+      "emailVerified": true,
+      "firstName": "Drew",
+      "lastName": "Castillo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "username": "merchant.owner",
+      "enabled": true,
+      "email": "merchant.owner@example.test",
+      "emailVerified": true,
+      "firstName": "Harper",
+      "lastName": "Vale",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "username": "merchant.ops",
+      "enabled": true,
+      "email": "merchant.ops@example.test",
+      "emailVerified": true,
+      "firstName": "Emery",
+      "lastName": "Holt",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "username": "merchant.viewer",
+      "enabled": true,
+      "email": "merchant.viewer@example.test",
+      "emailVerified": true,
+      "firstName": "Finley",
+      "lastName": "Moss",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "username": "compliance.officer",
+      "enabled": true,
+      "email": "compliance.officer@example.test",
+      "emailVerified": true,
+      "firstName": "Kai",
+      "lastName": "Brennan",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000014",
+      "username": "merchant.finance",
+      "enabled": true,
+      "email": "merchant.finance@example.test",
+      "emailVerified": true,
+      "firstName": "Ari",
+      "lastName": "Lowe",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000015",
+      "username": "merchant.dev",
+      "enabled": true,
+      "email": "merchant.dev@example.test",
+      "emailVerified": true,
+      "firstName": "Noa",
+      "lastName": "Sato",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000016",
+      "username": "recon.analyst",
+      "enabled": true,
+      "email": "recon.analyst@example.test",
+      "emailVerified": true,
+      "firstName": "Tali",
+      "lastName": "Ross",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000017",
+      "username": "partner.ops",
+      "enabled": true,
+      "email": "partner.ops@example.test",
+      "emailVerified": true,
+      "firstName": "Remy",
+      "lastName": "Clarke",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "service-account-zoikopay-console-admin",
+      "enabled": true,
+      "serviceAccountClientId": "zoikopay-console-admin",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users",
+          "query-users"
+        ]
+      }
+    }
+  ],
+  "passwordPolicy": "length(8) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername()"
+}
