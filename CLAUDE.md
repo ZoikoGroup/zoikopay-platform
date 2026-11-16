@@ -11,17 +11,22 @@ IDs to files with `docs/spec/INDEX.md` and cite specs by ID (e.g. "06-01").
   `int64`/`BIGINT` inside; never floats; URLs snake_case.
 - `docs/adr/0002-module-boundaries-and-local-platform.md`: module import rules,
   one schema and one DB role per context, PostgreSQL outbox (no broker).
+- `docs/adr/0005-financial-data-foundation.md`: IDs (internal UUIDv7 vs public `pi_…`), money limits
+  and no-rounding rule, idempotency/outbox/inbox, tenant RLS via `db.InTenantTx`, migration runner.
 - Unresolved conflicts go in `docs/OPEN_QUESTIONS.md`, not into code silently.
 
 ## Layout
 
-- `cmd/` six deployables: gateway, execution, finance, governance, outbox-relay, mockpsp.
+- `cmd/` six deployables: gateway, execution, finance, governance, outbox-relay, mockpsp; plus the `migrate` tool (not a deployable).
 - `internal/<module>/` nine bounded contexts (payment, merchant, eligibility,
   connector, ledger, recon, billing, notify, governance). The root package is the
   public contract; subpackages are private.
 - `internal/platform/` shared infrastructure; must not import business modules.
 - `internal/archtest/` enforces the boundaries in `make test`.
-- `db/migrations/<module>/` goose migrations, applied as `zp_migrator`.
+- `db/migrations/<module>/` forward-only SQL migrations (goose file format) applied by `cmd/migrate`
+  as `zp_migrator`: checksums, append-only history, advisory lock (ADR 0005). Start a module with
+  `go run ./cmd/migrate scaffold -module <m> -writer <role>`; destructive statements need
+  `-- zp:contract` / `-- zp:data-change` annotations.
 - `deploy/compose/` local stack; `deploy/compose/postgres/init/01-roles.sql` roles.
 
 ## Commands
@@ -29,6 +34,7 @@ IDs to files with `docs/spec/INDEX.md` and cite specs by ID (e.g. "06-01").
 - `make test`: unit tests with `-race`, no Docker.
 - `make test-integration`: Testcontainers against real PostgreSQL 18 (needs Docker).
 - `make lint`: golangci-lint and Spectral. `make vuln`: govulncheck.
+- `make migrate` / `make migrate-status` / `make migrate-verify`: migration runner (`make test` runs verify).
 - `make up` / `make down` / `make nuke`: local stack.
 - `make run-<service>`: one program against the local stack; `make smoke`: all six, checks `/healthz`.
 - Programs declare dependencies in `cmd/<name>/main.go` (`health.Dependency`); bootstrap

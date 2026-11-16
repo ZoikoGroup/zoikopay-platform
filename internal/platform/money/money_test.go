@@ -3,6 +3,7 @@ package money_test
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/zoiko/zoikopay/internal/platform/money"
@@ -11,7 +12,7 @@ import (
 func TestParseMinorAcceptsStrictDecimals(t *testing.T) {
 	for s, want := range map[string]money.Minor{
 		"0": 0, "1": 1, "1999": 1999, "-1": -1, "-250": -250,
-		"999999999999999": money.Minor(money.MaxMinor), "-999999999999999": -money.Minor(money.MaxMinor),
+		"999999999999999": 999999999999999, "9223372036854775807": 9223372036854775807, "-9223372036854775807": -9223372036854775807,
 	} {
 		got, err := money.ParseMinor(s)
 		if err != nil || got != want {
@@ -28,7 +29,7 @@ func TestParseMinorRejectsEverythingElse(t *testing.T) {
 			t.Errorf("ParseMinor(%q) err = %v; want ErrFormat", s, err)
 		}
 	}
-	for _, s := range []string{"1000000000000000", "-1000000000000000", "9223372036854775807", "99999999999999999999999"} {
+	for _, s := range []string{"9223372036854775808", "-9223372036854775808", "99999999999999999999999"} {
 		if _, err := money.ParseMinor(s); !errors.Is(err, money.ErrRange) {
 			t.Errorf("ParseMinor(%q) err = %v; want ErrRange", s, err)
 		}
@@ -97,11 +98,15 @@ func TestArithmeticNeverMixesCurrenciesOrOverflows(t *testing.T) {
 	if _, err := gbp(1).Add(eur); !errors.Is(err, money.ErrCurrencyMismatch) {
 		t.Errorf("GBP + EUR err = %v", err)
 	}
-	if _, err := gbp(money.MaxMinor).Add(gbp(1)); !errors.Is(err, money.ErrRange) {
-		t.Errorf("overflow past MaxMinor err = %v", err)
+	// Balances and totals may exceed the transaction limit; only int64 overflow is refused.
+	if got, err := gbp(money.MaxTransactionMinor).Add(gbp(1)); err != nil || int64(got.Amount) != money.MaxTransactionMinor+1 {
+		t.Errorf("sum past the transaction limit should be allowed: %v, %v", got, err)
 	}
-	if _, err := money.New(money.MaxMinor+1, "GBP"); !errors.Is(err, money.ErrRange) {
-		t.Errorf("New beyond MaxMinor err = %v", err)
+	if _, err := gbp(math.MaxInt64).Add(gbp(1)); !errors.Is(err, money.ErrOverflow) {
+		t.Errorf("int64 overflow err = %v", err)
+	}
+	if _, err := gbp(-math.MaxInt64).Sub(gbp(1)); !errors.Is(err, money.ErrOverflow) {
+		t.Errorf("negative overflow err = %v", err)
 	}
 	if c, err := gbp(1).Cmp(gbp(2)); err != nil || c != -1 {
 		t.Errorf("Cmp = %d, %v", c, err)
@@ -128,4 +133,44 @@ func FuzzParseMinorRoundTrip(f *testing.F) {
 			t.Fatalf("accepted %q but formats as %q: not canonical", s, m.String())
 		}
 	})
+}
+
+func TestTransactionLimitAppliesOnlyToSingleTransactions(t *testing.T) {
+	if _, err := money.ParseTransaction("999999999999999", "GBP"); err != nil {
+		t.Fatalf("15 digits is within the limit: %v", err)
+	}
+	for _, s := range []string{"1000000000000000", "-1000000000000000"} {
+		if _, err := money.ParseTransaction(s, "GBP"); !errors.Is(err, money.ErrTransactionLimit) {
+			t.Errorf("ParseTransaction(%s) err = %v", s, err)
+		}
+		if _, err := money.Parse(s, "GBP"); err != nil {
+			t.Errorf("Parse(%s) for a balance should be allowed: %v", s, err)
+		}
+	}
+}
+
+func TestMulDivExactNeverRounds(t *testing.T) {
+	m, _ := money.New(1000, "GBP")
+	if got, err := money.MulDivExact(m, 15, 100); err != nil || got.Amount != 150 {
+		t.Fatalf("15%% of 1000 = %v, %v", got, err)
+	}
+	if _, err := money.MulDivExact(m, 1, 3); !errors.Is(err, money.ErrRoundingPolicyRequired) {
+		t.Fatalf("1000/3 must be blocked, got %v", err)
+	}
+	big, _ := money.New(math.MaxInt64, "GBP")
+	if got, err := money.MulDivExact(big, 2, 2); err != nil || got != big {
+		t.Fatalf("no intermediate overflow expected: %v, %v", got, err)
+	}
+	if _, err := money.MulDivExact(big, 2, 1); !errors.Is(err, money.ErrOverflow) {
+		t.Fatalf("result overflow err = %v", err)
+	}
+}
+
+func TestSQLChecks(t *testing.T) {
+	if got := money.TransactionAmountCheckSQL("amount_minor"); got != "CHECK (amount_minor BETWEEN -999999999999999 AND 999999999999999)" {
+		t.Fatal(got)
+	}
+	if got := money.CurrencyCheckSQL("currency"); got != "CHECK (currency IN ('EUR', 'GBP', 'USD'))" {
+		t.Fatal(got)
+	}
 }

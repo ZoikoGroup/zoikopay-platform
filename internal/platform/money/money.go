@@ -5,47 +5,49 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 )
 
-// MaxMinor is the largest absolute amount the platform accepts, in minor
-// units: 15 digits. int64 could hold 18, but every amount must also fit the
-// exact-integer range of the clients that read our JSON and leave headroom
-// for sums. Proposed in OPEN_QUESTIONS Q26 (Q2 chose int64 "with an API maximum").
-const MaxMinor int64 = 999_999_999_999_999
+// MaxTransactionMinor is the provisional limit for ONE transaction amount,
+// in minor units: 15 digits. It does NOT apply to balances, ledger totals or
+// aggregates; those are only protected against int64 overflow.
+// Status: provisional, awaiting owner approval (OPEN_QUESTIONS Q26).
+const MaxTransactionMinor int64 = 999_999_999_999_999
 
-// Errors returned by this package. Callers map them to validation_error (422).
+// Errors returned by this package. Callers map them to validation_error (422),
+// except ErrOverflow and ErrRoundingPolicyRequired, which block the operation.
 var (
 	ErrFormat           = errors.New("amount_minor must be a decimal integer string")
-	ErrRange            = errors.New("amount_minor is outside the allowed range")
+	ErrRange            = errors.New("amount is outside the supported integer range")
+	ErrTransactionLimit = errors.New("amount exceeds the per-transaction limit")
+	ErrOverflow         = errors.New("money arithmetic overflow")
 	ErrCurrency         = errors.New("unsupported currency")
 	ErrCurrencyMismatch = errors.New("currencies differ")
 )
 
-// Minor is an amount in minor units (for example pence). It marshals to a
-// JSON string and only unmarshals from one.
+// Minor is an amount in minor units (for example pence), held in int64.
+// math.MinInt64 is excluded so that every value can be negated safely.
+// It marshals to a JSON string and only unmarshals from one.
 type Minor int64
 
 // ParseMinor parses the wire form of amount_minor strictly: an optional "-",
 // then "0" or a digit 1-9 followed by digits. "-0", "+5", "01", "1.0",
-// "1e3", spaces and empty strings are rejected, as is anything beyond MaxMinor.
+// "1e3", spaces and empty strings are rejected (ErrFormat), as is anything
+// outside ±(2^63-1) (ErrRange). It does not apply the transaction limit:
+// use ParseTransaction for amounts of a single transaction.
 func ParseMinor(s string) (Minor, error) {
 	if !validDecimal(s) {
 		return 0, fmt.Errorf("%w: %q", ErrFormat, s)
 	}
-	// Longer than 1 sign + 18 digits cannot be in range; reject before parsing.
-	if len(s) > 19 {
+	if len(s) > 20 {
 		return 0, fmt.Errorf("%w: %s", ErrRange, s)
 	}
 	v, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
+	if err != nil || v == math.MinInt64 {
 		return 0, fmt.Errorf("%w: %s", ErrRange, s)
 	}
-	m := Minor(v)
-	if err := m.check(); err != nil {
-		return 0, err
-	}
-	return m, nil
+	return Minor(v), nil
 }
 
 func validDecimal(s string) bool {
@@ -70,20 +72,13 @@ func validDecimal(s string) bool {
 	return true
 }
 
-func (m Minor) check() error {
-	if m > Minor(MaxMinor) || m < -Minor(MaxMinor) {
-		return fmt.Errorf("%w: %d", ErrRange, int64(m))
-	}
-	return nil
-}
-
 // String returns the wire form, for example "1999".
 func (m Minor) String() string { return strconv.FormatInt(int64(m), 10) }
 
 // MarshalJSON writes the amount as a JSON string.
 func (m Minor) MarshalJSON() ([]byte, error) {
-	if err := m.check(); err != nil {
-		return nil, err
+	if int64(m) == math.MinInt64 {
+		return nil, ErrRange
 	}
 	return []byte(`"` + m.String() + `"`), nil
 }
@@ -124,20 +119,19 @@ func jsonKind(b []byte) string {
 	}
 }
 
-// Money is an amount with its currency. Construct it with New or Parse so the
-// currency and range are checked.
+// Money is an amount with its currency.
 type Money struct {
 	Amount   Minor    `json:"amount_minor"`
 	Currency Currency `json:"currency"`
 }
 
-// New validates amount and currency.
+// New validates the currency and the integer range (not the transaction limit).
 func New(amount int64, c Currency) (Money, error) {
 	m := Money{Amount: Minor(amount), Currency: c}
 	return m, m.Validate()
 }
 
-// Parse builds Money from the wire strings.
+// Parse builds Money from the wire strings (integer range, not the transaction limit).
 func Parse(amountMinor, currency string) (Money, error) {
 	a, err := ParseMinor(amountMinor)
 	if err != nil {
@@ -150,12 +144,36 @@ func Parse(amountMinor, currency string) (Money, error) {
 	return Money{Amount: a, Currency: c}, nil
 }
 
-// Validate checks the currency is supported and the amount is in range.
+// ParseTransaction parses the amount of a single transaction and applies
+// the per-transaction limit. Use it for every request amount.
+func ParseTransaction(amountMinor, currency string) (Money, error) {
+	m, err := Parse(amountMinor, currency)
+	if err != nil {
+		return Money{}, err
+	}
+	return m, m.ValidateTransaction()
+}
+
+// Validate checks the currency is supported and the amount is a valid Minor.
 func (m Money) Validate() error {
 	if _, err := ParseCurrency(string(m.Currency)); err != nil {
 		return err
 	}
-	return m.Amount.check()
+	if int64(m.Amount) == math.MinInt64 {
+		return ErrRange
+	}
+	return nil
+}
+
+// ValidateTransaction is Validate plus |amount| <= MaxTransactionMinor.
+func (m Money) ValidateTransaction() error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	if m.Amount > Minor(MaxTransactionMinor) || m.Amount < -Minor(MaxTransactionMinor) {
+		return fmt.Errorf("%w: %s", ErrTransactionLimit, m)
+	}
+	return nil
 }
 
 // UnmarshalJSON decodes {"amount_minor":"…","currency":"…"} and validates it.
@@ -187,26 +205,25 @@ func (m Money) IsNegative() bool { return m.Amount < 0 }
 // String is for logs and errors, for example "1999 GBP" (minor units).
 func (m Money) String() string { return m.Amount.String() + " " + string(m.Currency) }
 
-// Add returns m + o. Both must have the same currency; the result must stay in range.
+// Add returns m + o. Both must have the same currency. Fails with ErrOverflow
+// instead of wrapping; never rounds.
 func (m Money) Add(o Money) (Money, error) {
 	if m.Currency != o.Currency {
 		return Money{}, fmt.Errorf("%w: %s + %s", ErrCurrencyMismatch, m.Currency, o.Currency)
 	}
-	sum := Money{Amount: m.Amount + o.Amount, Currency: m.Currency}
-	// Both operands are within ±MaxMinor, so the int64 sum cannot overflow;
-	// only the range check can fail.
-	if err := sum.Amount.check(); err != nil {
-		return Money{}, err
+	a, b := int64(m.Amount), int64(o.Amount)
+	s := a + b
+	// Signed overflow happened iff both operands share a sign the result lacks.
+	if (a >= 0) == (b >= 0) && (s >= 0) != (a >= 0) || s == math.MinInt64 {
+		return Money{}, fmt.Errorf("%w: %s + %s", ErrOverflow, m, o)
 	}
-	return sum, nil
+	return Money{Amount: Minor(s), Currency: m.Currency}, nil
 }
 
-// Sub returns m - o. Both must have the same currency; the result must stay in range.
-func (m Money) Sub(o Money) (Money, error) {
-	return m.Add(o.Neg())
-}
+// Sub returns m - o with the same rules as Add.
+func (m Money) Sub(o Money) (Money, error) { return m.Add(o.Neg()) }
 
-// Neg returns -m.
+// Neg returns -m (always safe: math.MinInt64 is never a valid Minor).
 func (m Money) Neg() Money { return Money{Amount: -m.Amount, Currency: m.Currency} }
 
 // Cmp compares two amounts of the same currency: -1, 0 or +1.
@@ -223,7 +240,8 @@ func (m Money) Cmp(o Money) (int, error) {
 	return 0, nil
 }
 
-// Sum adds amounts of one currency. An empty list is zero in currency c.
+// Sum adds amounts of one currency (balances, totals: no transaction limit).
+// An empty list is zero in currency c.
 func Sum(c Currency, items ...Money) (Money, error) {
 	total, err := New(0, c)
 	if err != nil {

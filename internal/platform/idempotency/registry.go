@@ -113,6 +113,16 @@ func (r Registry) Reserve(ctx context.Context, tx pgx.Tx, s Scope, key Key, fing
 	if len(fingerprint) != 32 {
 		return Result{}, errors.New("idempotency: fingerprint must be a SHA-256 digest")
 	}
+	// The transaction's tenant (set by db.SetTenant) must be the scope's
+	// tenant; row-level security would refuse the insert anyway, but this
+	// gives a clear error instead of a policy violation.
+	var current *string
+	if err := tx.QueryRow(ctx, `SELECT current_setting('`+db.SettingTenant+`', true)`).Scan(&current); err != nil {
+		return Result{}, fmt.Errorf("read tenant context: %w", err)
+	}
+	if current == nil || *current != s.TenantID {
+		return Result{}, fmt.Errorf("%w: transaction tenant does not match idempotency scope", db.ErrNoTenant)
+	}
 	now := r.now()
 	args := []any{s.Environment, s.CellID, s.LegalEntityID, s.TenantID, s.MerchantID, s.ClientID, s.PrincipalID,
 		s.APIMajor, s.Method, s.RouteTemplate, s.OperationKind, key.Digest()}
@@ -193,12 +203,15 @@ func (r Registry) Complete(ctx context.Context, tx db.DBTX, operationID string, 
 	return nil
 }
 
-// TableSQL returns the DDL for this table in schema. A module's first goose
-// migration must contain exactly this statement (copied, as goose SQL cannot
-// call Go); integration tests use it directly. Retention, tombstones and
-// expiry classes (04-08 §6.2) wait for Payments/Finance/Legal approval.
+// TableSQL returns the DDL for this table in schema: the table, tenant
+// row-level security and the identity guard. Retention (04-08 §6.2) is not
+// approved, so identities are never deleted: the guard refuses DELETE and
+// TRUNCATE for every role, and refuses changes to a key's identity (scope,
+// digest, fingerprint, operation) or to a completed result.
+// Generate a module's migration with `go run ./cmd/migrate scaffold`.
 func TableSQL(schema string) string {
 	t := db.Table(schema, "idempotency_registry")
+	fn := db.Table(schema, "zp_idempotency_guard")
 	return `CREATE TABLE ` + t + ` (
     environment         text        NOT NULL CHECK (environment IN ('TEST','LIVE')),
     cell_id             text        NOT NULL,
@@ -216,11 +229,43 @@ func TableSQL(schema string) string {
     request_fingerprint bytea       NOT NULL CHECK (octet_length(request_fingerprint) = 32),
     operation_id        text        NOT NULL UNIQUE,
     status              text        NOT NULL CHECK (status IN ('IN_PROGRESS','COMPLETED')),
-    response_status     integer     NULL,
+    response_status     integer     NULL CHECK (response_status BETWEEN 100 AND 599),
     resource_id         text        NULL,
     created_at_utc      timestamptz NOT NULL,
     last_seen_at_utc    timestamptz NOT NULL,
     PRIMARY KEY (environment, cell_id, legal_entity_id, tenant_id, merchant_id, client_id, principal_id,
-                 api_major, method, route_template, operation_kind, key_digest)
-);`
+                 api_major, method, route_template, operation_kind, key_digest),
+    CHECK ((status = 'COMPLETED') = (response_status IS NOT NULL))
+);
+CREATE FUNCTION ` + fn + `() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    IF TG_OP IN ('DELETE', 'TRUNCATE') THEN
+        RAISE EXCEPTION 'idempotency identities are never deleted (04-08 §6.2)' USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF (NEW.environment, NEW.cell_id, NEW.legal_entity_id, NEW.tenant_id, NEW.merchant_id, NEW.client_id,
+        NEW.principal_id, NEW.api_major, NEW.method, NEW.route_template, NEW.operation_kind, NEW.key_digest,
+        NEW.fingerprint_version, NEW.request_fingerprint, NEW.operation_id, NEW.created_at_utc)
+       IS DISTINCT FROM
+       (OLD.environment, OLD.cell_id, OLD.legal_entity_id, OLD.tenant_id, OLD.merchant_id, OLD.client_id,
+        OLD.principal_id, OLD.api_major, OLD.method, OLD.route_template, OLD.operation_kind, OLD.key_digest,
+        OLD.fingerprint_version, OLD.request_fingerprint, OLD.operation_id, OLD.created_at_utc) THEN
+        RAISE EXCEPTION 'an idempotency identity cannot change' USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF OLD.status = 'COMPLETED' AND (NEW.status, NEW.response_status, NEW.resource_id)
+       IS DISTINCT FROM (OLD.status, OLD.response_status, OLD.resource_id) THEN
+        RAISE EXCEPTION 'a completed idempotency result cannot change' USING ERRCODE = 'restrict_violation';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER idempotency_guard BEFORE UPDATE OR DELETE ON ` + t + ` FOR EACH ROW EXECUTE FUNCTION ` + fn + `();
+CREATE TRIGGER idempotency_guard_truncate BEFORE TRUNCATE ON ` + t + ` FOR EACH STATEMENT EXECUTE FUNCTION ` + fn + `();
+` + db.TenantRLSSQL(schema, "idempotency_registry")
+}
+
+// GrantSQL grants the owning deployable's runtime role the least it needs:
+// read and insert keys, and update only the result columns. No DELETE.
+func GrantSQL(schema, writerRole string) string {
+	t := db.Table(schema, "idempotency_registry")
+	return `GRANT SELECT, INSERT ON ` + t + ` TO ` + writerRole + `;
+GRANT UPDATE (status, response_status, resource_id, last_seen_at_utc) ON ` + t + ` TO ` + writerRole + `;`
 }

@@ -2,9 +2,11 @@
 
 Payment orchestration platform for the merchant pilot.
 
-**Status: skeleton only.** The six programs start, connect to their
-dependencies and report health. There is no business logic, no database
-tables and no API endpoints yet.
+**Status: skeleton plus shared financial foundation.** The six programs
+start, connect to their dependencies and report health. The shared platform
+(money, IDs, idempotency, outbox/inbox, tenant row-level security, migration
+runner) is built and tested (ADR 0005). There is no business logic, no
+module tables and no API endpoints yet.
 
 ## 1. Prerequisites (one time)
 
@@ -76,6 +78,8 @@ make smoke              # all six programs against the running stack: /healthz o
 make lint               # golangci-lint and Spectral (OpenAPI)
 make vuln               # govulncheck
 make gen                # oapi-codegen (and sqlc once a module has queries)
+make migrate            # apply migrations (checksums, history, lock; ADR 0005)
+make migrate-status     # applied / pending / CHANGED / MISSING FILE per file
 make help               # every target
 ```
 
@@ -96,7 +100,7 @@ internal/platform/       shared code (health, db, workflow, httpserver, ...)
 internal/apigen/         code generated from api/openapi (do not edit)
 api/openapi/             OpenAPI 3.1 contracts (empty placeholders)
 api/events/<module>/     event schemas
-db/migrations/<module>/  goose migrations (empty)
+db/migrations/<module>/  forward-only SQL migrations, run by cmd/migrate (empty)
 db/queries/<module>/     sqlc queries (empty)
 deploy/compose/          local stack
 docs/                    specs (.docx, read-only), ADRs, open questions

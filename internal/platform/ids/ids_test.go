@@ -66,3 +66,26 @@ func TestNoCollisionsInSameMillisecond(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+func TestInternalIDsAreSeparateUUIDv7s(t *testing.T) {
+	id := ids.NewInternal()
+	if _, err := ids.ParseInternal(id); err != nil {
+		t.Fatalf("ParseInternal(%s): %v", id, err)
+	}
+	for _, bad := range []string{
+		"", strings.ToUpper(id), strings.ReplaceAll(id, "-", ""),
+		"8e03978e-40d5-43e8-bc93-6894a57f9324", // UUIDv4
+		ids.NewPublic(ids.PaymentIntent),
+	} {
+		if _, err := ids.ParseInternal(bad); !errors.Is(err, ids.ErrInvalid) {
+			t.Errorf("ParseInternal(%q) err = %v", bad, err)
+		}
+	}
+	// A public ID is never accepted where an internal ID is expected, and vice versa.
+	if _, err := ids.Parse(ids.PaymentIntent, id); !errors.Is(err, ids.ErrInvalid) {
+		t.Error("internal ID accepted as a public ID")
+	}
+	if !regexp.MustCompile(ids.PublicIDPattern(ids.PaymentIntent)).MatchString(ids.NewPublic(ids.PaymentIntent)) {
+		t.Error("PublicIDPattern does not match a fresh public ID")
+	}
+}

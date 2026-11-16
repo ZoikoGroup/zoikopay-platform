@@ -14,7 +14,6 @@ ZP_MIGRATOR_PASSWORD ?= local-dev-only-migrator
 ZP_MIGRATOR_DSN      ?= postgres://zp_migrator:$(ZP_MIGRATOR_PASSWORD)@localhost:$(ZP_PG_PORT)/zoikopay?sslmode=disable
 
 OPENAPI_SPECS := $(wildcard api/openapi/*.v1.yaml)
-MIGRATION_DIRS := $(sort $(dir $(wildcard db/migrations/*/*.sql)))
 
 .PHONY: help
 help: ## List targets
@@ -61,19 +60,16 @@ check-gen: gen ## Fail if generated code is stale (CI; needs git)
 ## ---- database --------------------------------------------------------------
 
 .PHONY: migrate
-migrate: ## Apply every module's migrations (as zp_migrator)
-	@if [ -z "$(MIGRATION_DIRS)" ]; then echo "migrate: no migrations yet"; fi
-	@for dir in $(MIGRATION_DIRS); do \
-	  mod=$$(basename $$dir); echo "migrate $$mod"; \
-	  $(TOOL) goose -dir $$dir -table zp_migrations.goose_$$mod postgres "$(ZP_MIGRATOR_DSN)" up; \
-	done
+migrate: ## Verify integrity, then apply pending migrations (as zp_migrator; ADR 0005)
+	ZP_MIGRATOR_DSN="$(ZP_MIGRATOR_DSN)" go run ./cmd/migrate up -dir db/migrations
 
 .PHONY: migrate-status
-migrate-status: ## Show migration status per module
-	@for dir in $(MIGRATION_DIRS); do \
-	  mod=$$(basename $$dir); echo "== $$mod"; \
-	  $(TOOL) goose -dir $$dir -table zp_migrations.goose_$$mod postgres "$(ZP_MIGRATOR_DSN)" status; \
-	done
+migrate-status: ## Show each migration file as applied, pending, CHANGED or MISSING FILE
+	ZP_MIGRATOR_DSN="$(ZP_MIGRATOR_DSN)" go run ./cmd/migrate status -dir db/migrations
+
+.PHONY: migrate-verify
+migrate-verify: ## Check migration files offline (names, order, expand-contract annotations)
+	go run ./cmd/migrate verify -dir db/migrations
 
 ## ---- quality ---------------------------------------------------------------
 
@@ -99,7 +95,7 @@ vuln: ## govulncheck
 	$(TOOL) govulncheck ./...
 
 .PHONY: test
-test: ## Unit tests with the race detector (no Docker needed)
+test: migrate-verify ## Unit tests with the race detector, plus offline migration checks (no Docker needed)
 	go test -race -count=1 ./...
 
 .PHONY: smoke
