@@ -5,13 +5,20 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+// npm supplies its CLI path on every supported OS, including Windows where
+// spawning "npm" directly cannot execute the npm.cmd wrapper.
+const npmCli = process.env.npm_execpath;
+if (!npmCli) {
+  console.error("Start the console with npm run dev from the repository root.");
+  process.exit(1);
+}
 const parts = [
   { name: "backend ", dir: `${root}backend` },
   { name: "frontend", dir: `${root}frontend` },
 ];
 
 const children = parts.map(({ name, dir }) => {
-  const child = spawn("npm", ["run", "dev"], { cwd: dir, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(process.execPath, [npmCli, "run", "dev"], { cwd: dir, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
   const prefix = (stream, out) => {
     let buf = "";
     stream.on("data", (d) => {
@@ -23,6 +30,10 @@ const children = parts.map(({ name, dir }) => {
   };
   prefix(child.stdout, process.stdout);
   prefix(child.stderr, process.stderr);
+  child.on("error", (error) => {
+    console.error(`[${name}] failed to start: ${error.message}`);
+    shutdown(1);
+  });
   child.on("exit", (code) => {
     console.log(`[${name}] stopped${code ? ` (exit code ${code})` : ""}`);
     shutdown(code ?? 0);

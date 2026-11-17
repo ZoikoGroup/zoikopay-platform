@@ -119,9 +119,24 @@ Run it from this folder (after `make up`):
 ```sh
 npm run dev                        # both servers in one terminal (Ctrl+C stops both)
 # or, in two terminals:
-cd backend  && npm run dev         # `backend` and `frontend` are shortcuts to zoiko-pay-console/*
-cd frontend && npm run dev
+npm run dev:backend
+npm run dev:frontend
 ```
+
+On a fresh clone, first install both apps from the repository root:
+
+```sh
+npm --prefix zoiko-pay-console/backend ci
+npm --prefix zoiko-pay-console/frontend ci
+```
+
+The root `backend` and `frontend` entries are symbolic-link shortcuts. On
+Windows, Git may check them out as small text files instead of folders.
+The actual source is in `zoiko-pay-console/backend` and
+`zoiko-pay-console/frontend`; the npm commands above use those real folders
+and do not require symbolic-link support. If those real folders are missing,
+check that you pulled `Naresh_65` or `main` and that sparse checkout is not
+excluding `zoiko-pay-console`.
 
 Open http://localhost:5173 and sign in (e.g. `ops.agent` / `Zoiko@123`).
 
