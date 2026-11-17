@@ -69,19 +69,23 @@ What each person sees depends on their role (see the user table).
 
 ## Install
 
+Run these commands from the repository root. Source lives in the real
+`backend/` and `frontend/` folders there; this folder holds console documentation
+and the combined startup script.
+
 ```sh
-cd zoiko-pay-console/backend  && npm ci
-cd ../frontend                && npm ci
-cp ../backend/.env.example ../backend/.env
+npm --prefix backend ci
+npm --prefix frontend ci
+# Copy backend/.env.example to backend/.env using your editor or file manager.
 ```
 
 ## Run (development)
 
-Two terminals:
+From the repository root, use two terminals (or run `npm run dev` for both):
 
 ```sh
-cd zoiko-pay-console/backend  && npm run dev   # http://localhost:4000
-cd zoiko-pay-console/frontend && npm run dev   # http://localhost:5173
+npm run dev:backend   # http://localhost:4000
+npm run dev:frontend   # http://localhost:5173
 ```
 
 Open **http://localhost:5173** and sign in.

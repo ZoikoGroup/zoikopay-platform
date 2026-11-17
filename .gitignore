@@ -8,7 +8,8 @@ deploy/compose/.env
 *.pem
 *.key
 node_modules/
-zoiko-pay-console/*/dist/
+frontend/dist/
+backend/dist/
 
 # Editors and local tool state
 .vscode/

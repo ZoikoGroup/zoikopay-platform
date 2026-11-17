@@ -44,7 +44,7 @@ IDs to files with `docs/spec/INDEX.md` and cite specs by ID (e.g. "06-01").
 - `make gen` then `make check-gen`: sqlc and oapi-codegen; generated code is committed.
 - Tools are pinned in `tools/go.mod`; run them with `go tool -modfile=tools/go.mod <tool>`.
 
-## Admin console (`zoiko-pay-console/`)
+## Admin console (`frontend/`, `backend/`)
 
 - Two Node.js servers: `frontend/` (React + Vite, 5173) and `backend/` (Express BFF, 4000). ADR 0003.
 - Scope: a sign-in page (own form; backend checks the password with Keycloak), the Overview dashboard, the 12
@@ -55,7 +55,7 @@ IDs to files with `docs/spec/INDEX.md` and cite specs by ID (e.g. "06-01").
 - Authorization lives in `backend/src/authorization/` and is enforced server-side on every route and record.
 - UI is strictly black and white; `frontend/src/test/monochrome.test.ts` fails on any other colour.
 - Per project: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`; backend `npm run test:e2e` against the running stack.
-- `zoiko-pay-console/go.mod` only hides `node_modules` from Go tooling; do not delete it.
+- `frontend/go.mod` and `backend/go.mod` hide `node_modules` from Go tooling; keep these exclusion modules. Console documentation and the combined startup script remain in `zoiko-pay-console/`.
 
 ## Rules
 

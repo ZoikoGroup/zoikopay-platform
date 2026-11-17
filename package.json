@@ -4,7 +4,7 @@
   "description": "Shortcuts to run the Zoiko Pay Console from the repository root. The Go services use the Makefile.",
   "scripts": {
     "dev": "node zoiko-pay-console/scripts/dev.mjs",
-    "dev:backend": "npm --prefix zoiko-pay-console/backend run dev",
-    "dev:frontend": "npm --prefix zoiko-pay-console/frontend run dev"
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev"
   }
 }

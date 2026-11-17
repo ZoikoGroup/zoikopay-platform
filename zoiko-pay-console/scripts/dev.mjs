@@ -4,7 +4,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+const root = fileURLToPath(new URL("../..", import.meta.url));
 // npm supplies its CLI path on every supported OS, including Windows where
 // spawning "npm" directly cannot execute the npm.cmd wrapper.
 const npmCli = process.env.npm_execpath;

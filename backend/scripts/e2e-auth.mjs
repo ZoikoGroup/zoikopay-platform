@@ -2,7 +2,7 @@
 // console backend (4000) and the frontend server (5173, proxying /api and /auth).
 //
 // Prerequisites: `make up` (repo root), backend running, frontend running.
-// Run: npm run test:e2e   (from zoiko-pay-console/backend)
+// Run: npm run test:e2e   (from backend)
 
 const CONSOLE = process.env.E2E_CONSOLE_URL ?? "http://localhost:5173";
 const PASSWORD = process.env.E2E_PASSWORD ?? "Zoiko@123";

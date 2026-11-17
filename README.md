@@ -110,7 +110,7 @@ docs/                    specs (.docx, read-only), ADRs, open questions
 
 ## Admin console
 
-`zoiko-pay-console/` holds the operations console: a React frontend (port
+`frontend/` and `backend/` hold the operations console: a React frontend (port
 5173) and a Node.js backend-for-frontend (port 4000), each a separate server.
 See [zoiko-pay-console/README.md](zoiko-pay-console/README.md) and ADR 0003.
 
@@ -126,17 +126,14 @@ npm run dev:frontend
 On a fresh clone, first install both apps from the repository root:
 
 ```sh
-npm --prefix zoiko-pay-console/backend ci
-npm --prefix zoiko-pay-console/frontend ci
+npm --prefix backend ci
+npm --prefix frontend ci
 ```
 
-The root `backend` and `frontend` entries are symbolic-link shortcuts. On
-Windows, Git may check them out as small text files instead of folders.
-The actual source is in `zoiko-pay-console/backend` and
-`zoiko-pay-console/frontend`; the npm commands above use those real folders
-and do not require symbolic-link support. If those real folders are missing,
-check that you pulled `Naresh_65` or `main` and that sparse checkout is not
-excluding `zoiko-pay-console`.
+The root `backend/` and `frontend/` are real source folders and work on
+Windows, macOS and Linux without symbolic links. Copy `backend/.env.example`
+to `backend/.env` before starting the backend. Keep the local stack running
+for sign-in (see `make up` above).
 
 Open http://localhost:5173 and sign in (e.g. `ops.agent` / `Zoiko@123`).
 

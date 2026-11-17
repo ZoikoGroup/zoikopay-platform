@@ -61,14 +61,14 @@ jobs:
         part: [backend, frontend]
     defaults:
       run:
-        working-directory: zoiko-pay-console/${{ matrix.part }}
+        working-directory: ${{ matrix.part }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: zoiko-pay-console/${{ matrix.part }}/package-lock.json
+          cache-dependency-path: ${{ matrix.part }}/package-lock.json
       - run: npm ci
       - name: Lint
         run: npm run lint
