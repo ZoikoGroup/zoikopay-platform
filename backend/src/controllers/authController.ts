@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { defaultEnvironment, NO_ACCESS_SCOPE } from "../authorization/principal.js";
+import { establishLogin } from "../services/loginSession.js";
 import type { AccountAdmin } from "../integrations/accounts.js";
 import type { IdentityProvider } from "../integrations/oidc.js";
 import { parse } from "../middleware/http.js";
@@ -7,9 +7,6 @@ import type { Services } from "../services/context.js";
 import { AppError } from "../types/errors.js";
 import { reauthBody } from "../validators/screens.js";
 import { changePasswordBody, loginBody, registerBody } from "../validators/session.js";
-
-const regenerate = (req: Request) =>
-  new Promise<void>((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
 
 export function authController(s: Services, idp: IdentityProvider, accounts: AccountAdmin) {
   return {
@@ -26,19 +23,7 @@ export function authController(s: Services, idp: IdentityProvider, accounts: Acc
         throw err;
       }
 
-      await regenerate(req); // session fixation defense
-      const membership = s.directory.find(claims.sub);
-      req.session.user = {
-        sub: claims.sub,
-        username: claims.username,
-        displayName: claims.displayName,
-        loginAt: s.now(),
-        authTime: claims.authTime,
-        refreshToken: claims.refreshToken,
-        environment: defaultEnvironment(membership?.scope ?? NO_ACCESS_SCOPE),
-      };
-      s.audit.append({ actorSub: claims.sub, actorUsername: claims.username, action: "auth.login", outcome: "SUCCEEDED",
-        requestId: req.requestId, detail: { membership: membership ? "found" : "none" } });
+      await establishLogin(req, claims, s);
       res.json({ data: { username: claims.username }, meta: { requestId: req.requestId, source: "console" } });
     },
 

@@ -41,7 +41,7 @@ export function AppShell() {
   };
 
   return (
-    <div className="shell" data-collapsed={collapsed} data-mobile-open={mobileOpen}>
+    <div className="shell" data-collapsed={collapsed} data-mobile-open={mobileOpen} data-command-center={pathname === "/"}>
       <a className="skip-link" href="#main">Skip to content</a>
       <Sidebar collapsed={collapsed} onToggle={toggle} onNavigate={() => setMobileOpen(false)} />
       {phone && mobileOpen && <div className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}

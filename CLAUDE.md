@@ -53,7 +53,7 @@ IDs to files with `docs/spec/INDEX.md` and cite specs by ID (e.g. "06-01").
 - Super Admin has no Overview: they land on the Super Admin page (health, counts, redacted tenant metadata; 03-05 §10.1, Q24).
 - The BFF holds no payment/ledger logic. Fixtures are TEST-only and labelled `source: "fixture"`.
 - Authorization lives in `backend/src/authorization/` and is enforced server-side on every route and record.
-- UI is strictly black and white; `frontend/src/test/monochrome.test.ts` fails on any other colour.
+- UI follows the user-approved navy, green and light ZoikoPay reference designs (2026-11-17). `frontend/src/test/brand.test.ts` checks the shared palette and contrast. Preserve existing permissions and TEST fixture labels.
 - Per project: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`; backend `npm run test:e2e` against the running stack.
 - `frontend/go.mod` and `backend/go.mod` hide `node_modules` from Go tooling; keep these exclusion modules. Console documentation and the combined startup script remain in `zoiko-pay-console/`.
 

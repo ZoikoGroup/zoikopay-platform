@@ -1,15 +1,6 @@
 import { humanize } from "../services/format";
 
-/**
- * Monochrome status system. With no colour available, status is carried by a
- * distinct glyph shape and fill weight, always paired with a text label:
- *
- *   positive  ● with check   (filled)        e.g. SUCCEEDED, APPROVED, ACTIVE
- *   attention ◆ with "!"     (filled, bold)  e.g. FAILED, OUTCOME_UNKNOWN, DENIED
- *   pending   ◐              (half filled)   e.g. PROCESSING, REQUIRES_*, PENDING
- *   ended     ○ with dash    (hollow, dim)   e.g. CANCELED, EXPIRED, REVOKED
- *   neutral   ○              (hollow)        anything else
- */
+/** Status uses semantic color and a distinct glyph, always paired with a text label. */
 export type Tone = "positive" | "attention" | "pending" | "ended" | "neutral";
 
 const TONES: Record<string, Tone> = {
@@ -43,30 +34,30 @@ export function StatusGlyph({ tone, size = 14 }: { tone: Tone; size?: number }) 
     case "positive":
       return (
         <svg {...common}>
-          <circle cx="8" cy="8" r="7" fill="#fff" />
-          <path d="M4.8 8.2 7 10.3l4.2-4.6" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="8" cy="8" r="7" fill="currentColor" />
+          <path d="M4.8 8.2 7 10.3l4.2-4.6" fill="none" stroke="var(--white)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "attention":
       return (
         <svg {...common}>
-          <path d="M8 .9 15.1 8 8 15.1.9 8Z" fill="#fff" />
-          <path d="M8 4.6v4.2" stroke="#000" strokeWidth="1.8" strokeLinecap="round" />
-          <circle cx="8" cy="11.2" r="1" fill="#000" />
+          <path d="M8 .9 15.1 8 8 15.1.9 8Z" fill="currentColor" />
+          <path d="M8 4.6v4.2" stroke="var(--white)" strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="8" cy="11.2" r="1" fill="var(--white)" />
         </svg>
       );
     case "pending":
       return (
         <svg {...common}>
-          <circle cx="8" cy="8" r="6.4" fill="none" stroke="#fff" strokeWidth="1.4" />
-          <path d="M8 1.6a6.4 6.4 0 0 1 0 12.8Z" fill="#fff" />
+          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M8 1.6a6.4 6.4 0 0 1 0 12.8Z" fill="currentColor" />
         </svg>
       );
     case "ended":
       return (
         <svg {...common}>
-          <circle cx="8" cy="8" r="6.4" fill="none" stroke="rgba(255,255,255,.58)" strokeWidth="1.4" />
-          <path d="M5 8h6" stroke="rgba(255,255,255,.58)" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M5 8h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       );
     default:

@@ -1,6 +1,6 @@
 # Zoiko Pay Console
 
-A black-and-white sign-in page and payment-operations dashboard for Zoiko Pay,
+A navy-and-green sign-in page and payment-operations dashboard for Zoiko Pay,
 built as two independent Node.js servers:
 
 | Part | Stack | Port | Role |
@@ -140,7 +140,7 @@ npm run lint && npm run typecheck && npm test   # 52 tests
 npm run test:e2e                                 # 27 checks against real Keycloak + running servers
 
 # frontend
-npm run lint && npm run typecheck && npm test   # 67 tests, incl. the black-and-white palette scan
+npm run lint && npm run typecheck && npm test   # includes shared brand-palette and contrast checks
 ```
 
 ## Security model
@@ -183,3 +183,10 @@ Not production-ready:
 5. No multi-factor authentication on the sign-in form yet.
 6. Phone-width blocking of sensitive approvals is enforced in the UI only.
 7. Manual accessibility audit not done.
+
+## Single sign-on
+
+Company SSO supports the local Keycloak authorization-code flow. Microsoft,
+Google and Apple controls become available after their broker connections
+are configured. See [SSO setup](../docs/SSO_SETUP.md) for the local setup
+command, provider registration steps, callback URLs and current limitations.

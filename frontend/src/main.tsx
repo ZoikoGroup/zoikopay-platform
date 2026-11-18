@@ -8,6 +8,8 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout.css";
 import "./styles/components.css";
+import "./styles/brand.css";
+import "./styles/command-center.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

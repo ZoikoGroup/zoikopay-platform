@@ -60,8 +60,10 @@ export function createApp(deps: AppDeps): { app: Express; services: Services; he
   app.use(requestContext);
   app.use(pinoHttp({
     logger: log,
+    serializers: { req: (request) => typeof request.url === 'string' && request.url.startsWith('/auth/sso/callback')
+      ? { ...request, url: '/auth/sso/callback', query: undefined } : request },
     genReqId: (req) => (req as express.Request).requestId,
-    redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
+    redact: ["req.headers.cookie", "req.headers.authorization", "req.headers.referer", 'res.headers["set-cookie"]', 'res.headers.location'],
     customLogLevel: (_req, res, err) => (err || res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info"),
   }));
   app.use(helmet({
@@ -86,7 +88,7 @@ export function createApp(deps: AppDeps): { app: Express; services: Services; he
   }));
   app.use(originCheck(config.publicOrigin));
 
-  app.use("/auth", authRoutes(services, deps.idp, accounts));
+  app.use("/auth", authRoutes(services, deps.idp, accounts, config));
   app.use("/api/v1", apiRoutes(services, health, accounts));
   app.use(notFoundRoute);
   app.use(errorHandler(log));

@@ -66,6 +66,7 @@ export function PaymentsTable({ compact, onOpen, selectedId }: { compact?: boole
     status: status ? [status] : undefined,
     merchantId: selection.merchantId || undefined,
     legalEntityId: selection.legalEntityId || undefined,
+    currency: selection.currency,
     from: from ? new Date(`${from}T00:00:00Z`).toISOString() : undefined,
     to: to ? new Date(`${to}T23:59:59Z`).toISOString() : undefined,
     sort, order, page, pageSize,

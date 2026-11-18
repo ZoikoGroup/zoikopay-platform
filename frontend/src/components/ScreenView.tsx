@@ -148,11 +148,11 @@ function RecordDrawer({ screenId, id, onClose }: { screenId: string; id: string;
 }
 
 /** A complete console screen: summary, filters, export, table and detail with actions. */
-export function ScreenView({ screenId }: { screenId: string }) {
+export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; initialQuery?: string }) {
   const layout = LAYOUTS[screenId];
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState("");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
   const dq = useDebounced(q);
   const query = { status: status || undefined, q: dq || undefined };
   const res = useApi((s) => api.screen(screenId, query, s), `${screenId}${JSON.stringify(query)}`);

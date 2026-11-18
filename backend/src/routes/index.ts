@@ -1,3 +1,5 @@
+import type { Config } from "../config.js";
+import { ssoController } from "../controllers/ssoController.js";
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { apiController } from "../controllers/apiController.js";
@@ -14,12 +16,16 @@ const limiterProblem = {
   title: "Too many requests", status: 429, code: "RATE_LIMITED", detail: "Slow down and retry shortly.",
 };
 
-export function authRoutes(s: Services, idp: IdentityProvider, accounts: AccountAdmin): Router {
+export function authRoutes(s: Services, idp: IdentityProvider, accounts: AccountAdmin, config: Config): Router {
   const r = Router();
   const c = authController(s, idp, accounts);
+  const sso = ssoController(config, idp, s);
   // Slows password guessing: 10 password checks per minute per client IP.
-  r.use(["/login", "/reauth", "/register", "/change-password"], rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false,
+  r.use(["/login", "/reauth", "/register", "/change-password", "/sso"], rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false,
     handler: (_req, res) => { res.status(429).type("application/problem+json").json(limiterProblem); } }));
+  r.get('/providers', sso.providers);
+  r.post('/sso/:provider', sso.start);
+  r.get('/sso/callback', sso.callback);
   r.post("/login", c.login);
   r.post("/reauth", c.reauth);
   r.post("/register", c.register);

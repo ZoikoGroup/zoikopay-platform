@@ -1,7 +1,7 @@
-import { ArrowRight, Check, Eye, EyeOff, Lock, Minus } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Eye, EyeOff, Layers3, Lock, Minus, Network, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { WorldMap } from "../components/WorldMap";
-import { BrandMark } from "../navigation/Sidebar";
+import { SignInOptions } from "../components/SignInOptions";
+import { Brand } from "../components/Brand";
 import { api } from "../services/api";
 import { ApiError } from "../services/http";
 
@@ -40,7 +40,7 @@ function PasswordInput({ id, label, value, onChange, autoComplete }: { id: strin
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <div className="password-wrap">
-        <input id={id} className="input input-lg" type={show ? "text" : "password"} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} />
+        <input id={id} className="input input-lg" type={show ? "text" : "password"} placeholder="Enter your password" autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} />
         <button type="button" className="icon-btn" onClick={() => setShow((s) => !s)} aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} aria-pressed={show}>
           {show ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
@@ -86,7 +86,7 @@ function Banner({ tone, children }: { tone: "error" | "ok"; children: ReactNode 
   );
 }
 
-function SignInForm({ onSignedIn, initialError, notice }: { onSignedIn: () => void; initialError?: string; notice?: string }) {
+function SignInForm({ onSignedIn, initialError, notice, onChangePassword }: { onSignedIn: () => void; initialError?: string; notice?: string; onChangePassword: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,9 +110,10 @@ function SignInForm({ onSignedIn, initialError, notice }: { onSignedIn: () => vo
     <form className="stack" onSubmit={submit} noValidate>
       {notice && !error && <Banner tone="ok">{notice}</Banner>}
       {error && <Banner tone="error">{error}</Banner>}
-      <Field id="username" label="Username" value={username} onChange={setUsername} autoComplete="username" />
+      <Field id="username" label="Work email or username" value={username} onChange={setUsername} autoComplete="username" />
       <PasswordInput id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
-      <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>{busy ? "Signing in…" : <>Sign in <ArrowRight size={16} aria-hidden="true" /></>}</button>
+      <div className="auth-options"><span className="row"><Lock size={12} /> Secure workspace sign-in</span><button type="button" onClick={onChangePassword}>Change password?</button></div>
+      <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>{busy ? "Signing in…" : <>Log In <ArrowRight size={15} aria-hidden="true" /></>}</button>
     </form>
   );
 }
@@ -199,54 +200,41 @@ function ChangePasswordForm({ onDone }: { onDone: (username: string) => void }) 
 export function LoginPage({ reason, onSignedIn }: { reason?: string; onSignedIn: () => void }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [notice, setNotice] = useState<string>();
-  const title = { signin: "Sign in", create: "Create account", change: "Change password" }[mode];
+  const title = { signin: "Welcome back", create: "Create your account", change: "Change password" }[mode];
   const back = (msg: string) => { setNotice(msg); setMode("signin"); };
 
   return (
     <main className="login">
-      <section className="login-art" aria-hidden="true">
-        <WorldMap />
-        <div className="login-art-text">
-          <span className="eyebrow">Zoiko Pay</span>
-          <p>Global payment operations, one view.</p>
+      <section className="login-art" aria-label="Zoiko Pay payment operations">
+        <Brand light />
+        <div className="login-hero-copy">
+          <h2>Payments you can prove,<br /><span>from checkout to bank.</span></h2>
+          <p>Payment orchestration, four-way reconciliation, double-entry ledger visibility, and evidence-grade financial controls.</p>
+          <div className="login-features">
+            {[{ Icon: Network, label: <>Payment<br />Orchestration</> }, { Icon: Layers3, label: <>Four-Way<br />Reconciliation</> }, { Icon: BookOpen, label: <>Double-Entry<br />Ledger</> }, { Icon: ShieldCheck, label: <>Jurisdiction<br />Controls</> }].map(({ Icon, label }, i) => <div className="login-feature" key={i}><span><Icon size={26} strokeWidth={1.6} /></span><span>{label}</span></div>)}
+          </div>
+        </div>
+        <div className="login-evidence">
+          <h3><ShieldCheck size={25} /> Payment Evidence <span>Sandbox example</span></h3>
+          <p>One payment. A traceable journey. Independent evidence at every stage.</p>
+          <div className="login-evidence-steps">{['Authorized', 'Captured', 'Settled', 'Reconciled'].map((step) => <div key={step}><Check size={20} /><span>{step}</span><small>Illustrative milestone</small></div>)}</div>
         </div>
       </section>
-
-      <section className="login-panel">
+      <section className="login-panel" aria-labelledby="login-title">
         <div className="login-form">
-          <div className="row" style={{ gap: 12 }}>
-            <BrandMark />
-            <span className="brand-word">ZOIKO PAY <span>CONSOLE</span></span>
+          <div role="tablist" aria-label="Account" className="auth-tabs">
+            {(["signin", "create", "change"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setNotice(undefined); }}>{{ signin: "Login", create: "Register", change: "Change Password" }[m]}</button>)}
           </div>
-
-          <div role="tablist" aria-label="Account" className="segmented" style={{ width: "100%" }}>
-            {(["signin", "create", "change"] as Mode[]).map((m) => (
-              <button key={m} role="tab" aria-selected={mode === m} aria-checked={mode === m} style={{ flex: 1 }}
-                onClick={() => { setMode(m); setNotice(undefined); }}>
-                {{ signin: "Sign in", create: "Create account", change: "Change password" }[m]}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <h1 id="login-title">{title}</h1>
-            <p className="muted">
-              {mode === "signin" && "Use your Zoiko iD username and password."}
-              {mode === "create" && "Choose a username and password for your Zoiko iD."}
-              {mode === "change" && "Confirm your current password, then choose a new one."}
-            </p>
-          </div>
-
-          {mode === "signin" && (
-            <SignInForm onSignedIn={onSignedIn} notice={notice}
-              initialError={reason === "SESSION_EXPIRED" ? "Your session expired. Sign in again." : undefined} />
-          )}
-          {mode === "create" && <CreateAccountForm onDone={(u) => back(`Account ${u} created. Sign in; you will have access once an administrator assigns your role.`)} />}
-          {mode === "change" && <ChangePasswordForm onDone={(u) => back(`Password changed for ${u}. Sign in with your new password.`)} />}
-
-          <p className="subtle" style={{ fontSize: "var(--fs-xs)" }}>
-            Local development: accounts live in the Keycloak realm <span className="mono">zoikopay</span>. Data after sign-in is mock data for TEST.
-          </p>
+          <Brand />
+          <div className="auth-heading"><h1 id="login-title">{title}</h1><p className="muted">{mode === 'signin' ? 'Sign in to your Zoiko Pay workspace.' : mode === 'create' ? 'Start with a secure Zoiko iD account.' : 'Verify your current password to choose a new one.'}</p></div>
+          {mode === 'signin' && <SignInOptions />}
+          {mode === 'signin' && <SignInForm onSignedIn={onSignedIn} notice={notice} onChangePassword={() => setMode('change')} initialError={reason === 'SESSION_EXPIRED' ? 'Your session expired. Sign in again.' : undefined} />}
+          {mode === 'create' && <CreateAccountForm onDone={(u) => back('Account ' + u + ' created. Sign in; an administrator must assign your role.')} />}
+          {mode === 'change' && <ChangePasswordForm onDone={(u) => back('Password changed for ' + u + '. Sign in with your new password.')} />}
+          {mode === 'signin' && <p className="auth-switch">New to Zoiko Pay? <button type="button" onClick={() => setMode('create')}>Register</button></p>}
+          <div className="auth-protected"><ShieldCheck size={16} />Protected sign-in · Access is verified for your role</div>
+          <p className="auth-provider-note">Sandbox workspace · Payment data after sign-in is TEST data.</p>
+          <footer className="auth-footer"><span>Zoiko Pay Operations</span><span>Secure by design</span><span>© {new Date().getFullYear()} Zoiko Pay</span></footer>
         </div>
       </section>
     </main>

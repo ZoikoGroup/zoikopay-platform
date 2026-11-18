@@ -10,9 +10,23 @@ export interface IdentityClaims {
   refreshToken?: string;
 }
 
+export interface AuthorizationRequest {
+  url: string;
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+}
+export interface AuthorizationTransaction extends AuthorizationRequest {
+  provider: 'microsoft' | 'google' | 'apple' | 'company';
+  redirectUri: string;
+  createdAt: number;
+}
+
 /** What the auth routes need from the identity provider. Swappable in tests. */
 export interface IdentityProvider {
   /** Verifies a username and password. Throws AppError INVALID_CREDENTIALS when they are wrong. */
+  authorizationRequest?(redirectUri: string, providerAlias?: string): Promise<AuthorizationRequest>;
+  authorizationCallback?(url: URL, transaction: AuthorizationTransaction): Promise<IdentityClaims>;
   passwordLogin(username: string, password: string): Promise<IdentityClaims>;
   /** Ends the identity-provider session. Best effort. */
   logout(refreshToken: string | undefined): Promise<void>;
@@ -70,6 +84,35 @@ export class KeycloakProvider implements IdentityProvider {
       authTime: typeof claims.auth_time === "number" ? claims.auth_time : Math.floor(Date.now() / 1000),
       refreshToken: tokens.refresh_token,
     };
+  }
+
+  async authorizationRequest(redirectUri: string, providerAlias?: string): Promise<AuthorizationRequest> {
+    const configuration = await this.configuration();
+    const codeVerifier = client.randomPKCECodeVerifier();
+    const state = client.randomState();
+    const nonce = client.randomNonce();
+    const url = client.buildAuthorizationUrl(configuration, {
+      redirect_uri: redirectUri, response_type: 'code', scope: 'openid profile email',
+      code_challenge: await client.calculatePKCECodeChallenge(codeVerifier), code_challenge_method: 'S256', state, nonce,
+      ...(providerAlias ? { kc_idp_hint: providerAlias } : {}),
+    });
+    return { url: url.href, codeVerifier, state, nonce };
+  }
+
+  async authorizationCallback(url: URL, transaction: AuthorizationTransaction): Promise<IdentityClaims> {
+    try {
+      const tokens = await client.authorizationCodeGrant(await this.configuration(), url, {
+        pkceCodeVerifier: transaction.codeVerifier, expectedState: transaction.state,
+        expectedNonce: transaction.nonce, idTokenExpected: true,
+      });
+      const claims = tokens.claims();
+      if (!claims?.sub) throw new Error('Missing subject');
+      const username = typeof claims.preferred_username === 'string' ? claims.preferred_username : claims.sub;
+      return { sub: claims.sub, username, displayName: typeof claims.name === 'string' && claims.name ? claims.name : username,
+        authTime: typeof claims.auth_time === 'number' ? claims.auth_time : Math.floor(Date.now() / 1000), refreshToken: tokens.refresh_token };
+    } catch {
+      throw new AppError(401, 'INVALID_CREDENTIALS', 'Sign-in could not be verified');
+    }
   }
 
   async logout(refreshToken: string | undefined): Promise<void> {

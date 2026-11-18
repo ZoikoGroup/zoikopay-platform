@@ -2,7 +2,7 @@ import { useId, useMemo, useState } from "react";
 import { formatCount, formatDateTime, formatDay, formatMoney, formatTime } from "../services/format";
 import type { ActivityBucket, Period } from "../types/api";
 
-/** Minimal monochrome sparkline. Decorative: values are stated in text next to it. */
+/** Minimal brand-color sparkline. Decorative: values are stated in text next to it. */
 export function Sparkline({ values, height = 32 }: { values: number[]; height?: number }) {
   const id = useId();
   if (values.length < 2) return <div style={{ height }} aria-hidden="true" />;
@@ -15,12 +15,12 @@ export function Sparkline({ values, height = 32 }: { values: number[]; height?: 
     <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ width: "100%", height }} aria-hidden="true">
       <defs>
         <linearGradient id={`${id}-g`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.16" />
-          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0" stopColor="var(--brand)" stopOpacity="0.16" />
+          <stop offset="1" stopColor="var(--brand)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={`${d}L${w},${height}L0,${height}Z`} fill={`url(#${id}-g)`} />
-      <path d={d} fill="none" stroke="#fff" strokeWidth="1.25" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="var(--brand)" strokeWidth="1.25" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -116,7 +116,7 @@ export function ActivityChart({ buckets, period, currency, amountsVisible }: {
               const h = (b.count / maxCount) * ih * 0.55;
               return (
                 <rect key={b.start} x={(xs[i] ?? 0) - barW / 2} y={pad.t + ih - h} width={barW} height={h} rx={1.5}
-                  fill={active === i ? "rgba(255,255,255,.42)" : "var(--chart-bar)"} />
+                  fill={active === i ? "var(--brand)" : "var(--chart-bar)"} />
               );
             })}
             {amountsVisible && maxVol > 1 && (
@@ -126,9 +126,9 @@ export function ActivityChart({ buckets, period, currency, amountsVisible }: {
               </>
             )}
             {buckets.map((b, i) => i % labelEvery === 0 && (
-              <text key={b.start} x={xs[i]} y={H - 8} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,.58)">{bucketLabel(b, period)}</text>
+              <text key={b.start} x={xs[i]} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--text-3)">{bucketLabel(b, period)}</text>
             ))}
-            {active !== null && <line x1={xs[active]} x2={xs[active]} y1={pad.t} y2={pad.t + ih} stroke="rgba(255,255,255,.5)" strokeDasharray="2 3" />}
+            {active !== null && <line x1={xs[active]} x2={xs[active]} y1={pad.t} y2={pad.t + ih} stroke="var(--text-3)" strokeDasharray="2 3" />}
             {buckets.map((b, i) => (
               <rect key={`hit-${b.start}`} x={pad.l + step * i} y={0} width={step} height={H} fill="transparent" onMouseEnter={() => setActive(i)} />
             ))}
@@ -154,7 +154,7 @@ export function Breakdown({ succeeded, failed }: { succeeded: number; failed: nu
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="row-between" style={{ fontSize: "var(--fs-xs)" }}>
-        <span className="legend-key"><span className="swatch-bar" style={{ background: "#fff" }} /> Succeeded <strong className="num">{formatCount(succeeded)}</strong></span>
+        <span className="legend-key"><span className="swatch-bar" style={{ background: "var(--brand)" }} /> Succeeded <strong className="num">{formatCount(succeeded)}</strong></span>
         <span className="legend-key"><span className="swatch-hatch" /> Failed <strong className="num">{formatCount(failed)}</strong></span>
       </div>
       <div className="breakdown-bar" role="img" aria-label={`${pct}% succeeded of ${total} payments with a final outcome`}>

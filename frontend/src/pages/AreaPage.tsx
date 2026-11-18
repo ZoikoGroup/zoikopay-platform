@@ -5,6 +5,10 @@ import { PageHead } from "../components/Card";
 import { PaymentDrawer, PaymentsTable } from "../components/payments";
 import { SandboxIntent } from "../components/SandboxIntent";
 import { ScreenView } from "../components/ScreenView";
+import { CreatePaymentWorkspace, FundsWorkspace, OperationsWorkspace, PaymentsWorkspace, RiskWorkspace } from "./WorkspaceDashboards";
+import { Card } from "../components/Card";
+import { Link } from "react-router";
+import { WorkspaceSettings } from "./WorkspaceSettings";
 import { PlatformPage } from "./PlatformPage";
 import { AccessPage } from "./AccessPage";
 import { ExceptionalPage } from "./ExceptionalPage";
@@ -40,6 +44,17 @@ export function AreaPage({ item }: { item: NavItem }) {
   if (item.key === "platform") return <PlatformPage />;
   if (item.key === "access") return <AccessPage />;
   if (item.key === "exceptional") return <ExceptionalPage />;
+
+  if (item.key === "settings") return <WorkspaceSettings />;
+  if (item.key === "developers" && params.get("view") === "webhooks") return <><PageHead title="Webhooks" description="Review the endpoint and delivery records available to your role." /><ScreenView screenId="ZP-BRW-013" initialQuery="Webhook endpoint" /></>;
+  if (item.key === "developers" && params.get("view") === "toks") return <><PageHead title="TOKs" description="Integration workspace" /><Card title="TOKs is not connected"><p>This workspace has no configured TOKs integration. No external action is performed from this page.</p><Link className="dash-card-link" to="/developers" style={{ marginTop: 16 }}>Open API & Developer</Link></Card></>;
+  if (item.key === "operations") return <OperationsWorkspace />;
+  if (item.key === "reports") return <PaymentsWorkspace reports />;
+  if (item.key === "payments" && !fromLink) return <PaymentsWorkspace />;
+  if (item.key === "payments" && fromLink === "ZP-BRW-004") return <CreatePaymentWorkspace />;
+  if (item.key === "finance" && !fromLink) return <FundsWorkspace />;
+  if (item.key === "payouts" && !fromLink) return <FundsWorkspace payoutsOnly />;
+  if (item.key === "risk" && !fromLink) return <RiskWorkspace />;
 
   if (item.key === "audits") {
     return (

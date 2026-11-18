@@ -1,5 +1,5 @@
 import type {
-  AuditResponse, Notification, RecordView, SandboxIntent, ScreenList, SearchHit,
+  SsoProviderOption, AuditResponse, Notification, RecordView, SandboxIntent, ScreenList, SearchHit,
   ActivityResponse, Environment, KpiResponse, Me, Page, Payment, PaymentDetail, Period, RecentActivityItem, ScopeOptions,
   SystemHealth, PlatformSummary, XaList, XaGrant, XaOptions, XaPayment, AccessMembers, AccessMember, AccessOptions, AccessRequestBody,
 } from "../types/api";
@@ -29,6 +29,7 @@ export interface PaymentQuery {
 
 /** Typed client for every console backend endpoint. */
 export const api = {
+  ssoProviders: (signal?: AbortSignal) => http.get<{ providers: SsoProviderOption[] }>('/auth/providers', signal),
   login: (username: string, password: string) => http.post<{ username: string }>("/auth/login", { username, password }),
   logout: () => http.post<{ signedOut: boolean }>("/auth/logout"),
   register: (b: { username: string; firstName: string; lastName: string; email: string; password: string }) =>

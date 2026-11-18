@@ -408,3 +408,6 @@ export interface SandboxIntent {
   notice: string;
   idempotent_replay: boolean;
 }
+
+export type SsoProviderId = 'microsoft' | 'google' | 'apple' | 'company';
+export interface SsoProviderOption { id: SsoProviderId; enabled: boolean }

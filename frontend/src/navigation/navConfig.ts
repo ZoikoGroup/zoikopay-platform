@@ -43,6 +43,9 @@ export const NAV: NavItem[] = [
   { key: "exceptional", label: "Exceptional access", path: "/exceptional", icon: ExceptionalGlyph, group: "Platform", permission: "area.exceptional", screens: ["ZP-PER-WF-007", "ZP-PER-WF-011"] },
   // Not in the §07 rail: the Super Admin coordination page from 03-05 §10.1 (OPEN_QUESTIONS Q18).
   { key: "platform", label: "Super Admin", path: "/platform", icon: PlatformGlyph, group: "Platform", permission: "area.platform", screens: [] },
+  { key: "operations", label: "Operations", path: "/operations", icon: PlatformGlyph, group: "Platform", permission: "health.view", screens: [] },
+  { key: "reports", label: "Reports & Analytics", path: "/reports", icon: AuditsGlyph, group: "Platform", permission: "overview.view", screens: [] },
+  { key: "settings", label: "Settings", path: "/settings", icon: PlatformGlyph, group: "Platform", permission: "overview.view", screens: [] },
 ];
 
 export function isVisible(item: NavItem, me: Pick<Me, "permissions">): boolean {

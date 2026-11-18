@@ -1,4 +1,4 @@
-import { CircleHelp, LogOut, Menu } from "lucide-react";
+import { CircleHelp, LogOut, Menu, SlidersHorizontal } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { GlobalSearch } from "../components/GlobalSearch";
@@ -37,7 +37,7 @@ function UserMenu() {
     <div ref={ref} style={{ position: "relative" }}>
       <button className="btn btn-ghost" style={{ height: 38, padding: "0 6px 0 4px", gap: 10 }} aria-expanded={open} aria-haspopup="dialog"
         onClick={() => setOpen((o) => !o)} aria-label={`Account menu for ${me.displayName}`}>
-        <span className="icon-ring" style={{ width: 28, height: 28, fontSize: 11, fontWeight: 650, color: "var(--text)" }} aria-hidden="true">{initials(me.displayName)}</span>
+        <span className="header-avatar" aria-hidden="true">{initials(me.displayName)}</span>
         <span className="desktop-only" style={{ display: "grid", textAlign: "left", lineHeight: 1.2 }}>
           <span style={{ fontSize: "var(--fs-sm)" }}>{me.displayName}</span>
           <span className="subtle" style={{ fontSize: "var(--fs-2xs)" }}>{me.personas.join(", ") || "No role"}</span>
@@ -122,26 +122,34 @@ function EnvSwitch() {
         value={me.environment}
         disabled={switching}
         onChange={change}
-        options={(["TEST", "LIVE"] as const).map((e) => ({ value: e, label: e, disabled: !me.environments.includes(e) }))}
+        options={(["TEST", "LIVE"] as const).map((e) => ({ value: e, label: e === "TEST" ? "Sandbox (Test)" : "Live", disabled: !me.environments.includes(e) }))}
       />
       {envError && <span className="sr-only" role="alert">{envError}</span>}
     </>
   );
 }
 
+function ScopeMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(ref, open, () => setOpen(false));
+  return <div ref={ref} style={{ position: 'relative' }}><button className="icon-btn" aria-label="Filter workspace" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)}><SlidersHorizontal size={17} /></button>{open && <div className="popover cc-scope-popover" role="dialog" aria-label="Workspace scope"><div className="popover-head"><strong>Workspace scope</strong></div><ScopeBar /></div>}</div>;
+}
+
 export function Header({ onOpenMenu }: { onOpenMenu: () => void }) {
-  const { me, can } = useSession();
+  const { me, can, scope, selection, setSelection } = useSession();
   if (!me) return null;
   return (
     <header className="header">
       <div className="header-left">
         <button className="icon-btn mobile-only" onClick={onOpenMenu} aria-label="Open navigation"><Menu size={18} /></button>
-        <Breadcrumb />
+        {can("overview.view") ? <div className="header-search"><GlobalSearch /></div> : <Breadcrumb />}
       </div>
       <div className="header-right">
         {/* The server refuses /search without overview.view (Super Admin), so do not offer it. */}
-        {can("overview.view") && <span className="wide-only"><GlobalSearch /></span>}
         <span className="hide-phone"><EnvSwitch /></span>
+        {scope && <select className="header-currency" aria-label="Display currency" value={selection.currency} onChange={(e) => setSelection({ currency: e.target.value })}>{scope.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>}
+        {scope && <ScopeMenu />}
         <NotificationPanel />
         <HelpMenu />
         <UserMenu />

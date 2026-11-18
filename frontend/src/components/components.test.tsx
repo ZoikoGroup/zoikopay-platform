@@ -1,10 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "../services/api";
 import { LoginPage, PASSWORD_RULES } from "../pages/LoginPage";
 import { KpiCard } from "./KpiCard";
 import { StatusBadge, toneOf } from "./StatusBadge";
 
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => vi.spyOn(api, 'ssoProviders').mockResolvedValue({ data: { providers: [] }, meta: { requestId: 'test', environment: null, source: 'console', asOf: '2026-11-18T00:00:00Z' } }));
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function problem(status: number, code: string, title: string) {
   return new Response(JSON.stringify({ status, code, title }), { status, headers: { "content-type": "application/problem+json" } });
@@ -16,9 +18,9 @@ describe("LoginPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     const onSignedIn = vi.fn();
     render(<LoginPage onSignedIn={onSignedIn} />);
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: " ops.agent " } });
+    fireEvent.change(screen.getByLabelText("Work email or username"), { target: { value: " ops.agent " } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
-    fireEvent.click(screen.getByRole("button", { name: /Sign in/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
     await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/auth/login");
@@ -29,18 +31,18 @@ describe("LoginPage", () => {
   it("shows a generic error for wrong credentials", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => problem(401, "INVALID_CREDENTIALS", "Invalid username or password")));
     render(<LoginPage onSignedIn={() => undefined} />);
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "ops.agent" } });
+    fireEvent.change(screen.getByLabelText("Work email or username"), { target: { value: "ops.agent" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "wrong" } });
-    fireEvent.click(screen.getByRole("button", { name: /Sign in/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid username or password.");
   });
 
   it("explains rate limiting", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => problem(429, "RATE_LIMITED", "Too many requests")));
     render(<LoginPage onSignedIn={() => undefined} />);
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "a" } });
+    fireEvent.change(screen.getByLabelText("Work email or username"), { target: { value: "a" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "b" } });
-    fireEvent.click(screen.getByRole("button", { name: /Sign in/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/Too many attempts/);
   });
 
@@ -48,7 +50,7 @@ describe("LoginPage", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     render(<LoginPage onSignedIn={() => undefined} />);
-    fireEvent.click(screen.getByRole("button", { name: /Sign in/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Enter your username and password.");
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -75,7 +77,7 @@ describe("LoginPage: create account and change password", () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { username: "new.user" } }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<LoginPage onSignedIn={() => undefined} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Create account" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Register" }));
     fireEvent.change(screen.getByLabelText("First name"), { target: { value: "New" } });
     fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "User" } });
     fireEvent.change(screen.getByLabelText("Work email"), { target: { value: "new.user@example.test" } });
@@ -83,7 +85,7 @@ describe("LoginPage: create account and change password", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Zoiko@123" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "Zoiko@123" } });
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
-    expect(await screen.findByRole("status")).toHaveTextContent(/Account new.user created/);
+    expect(await screen.findByText(/Account new.user created/)).toBeInTheDocument();
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/auth/register");
     expect(JSON.parse(String(init.body))).toMatchObject({ username: "new.user", password: "Zoiko@123" });
@@ -93,7 +95,7 @@ describe("LoginPage: create account and change password", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     render(<LoginPage onSignedIn={() => undefined} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Change password" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Change Password" }));
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "ops.agent" } });
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "Zoiko@123" } });
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "Better#Pass9" } });

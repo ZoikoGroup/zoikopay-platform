@@ -8,6 +8,7 @@ export interface Config {
   publicOrigin: string;
   oidc: { issuer: string; clientId: string; clientSecret: string };
   sessionSecret: string;
+  sso?: { enabled: boolean; aliases: Partial<Record<'microsoft' | 'google' | 'apple' | 'company', string>> };
   /** Service client for creating accounts and setting passwords. */
   accountAdmin: { clientId: string; clientSecret: string };
   goServices: { name: string; baseUrl: string }[];
@@ -22,6 +23,11 @@ const schema = z.object({
   OIDC_ISSUER: z.url(),
   OIDC_CLIENT_ID: z.string().min(1),
   OIDC_CLIENT_SECRET: z.string().min(1),
+  OIDC_SSO_ENABLED: z.enum(['true', 'false']).optional(),
+  OIDC_SSO_MICROSOFT_ALIAS: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
+  OIDC_SSO_GOOGLE_ALIAS: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
+  OIDC_SSO_APPLE_ALIAS: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
+  OIDC_SSO_COMPANY_ALIAS: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   ACCOUNT_ADMIN_CLIENT_ID: z.string().min(1).default("zoikopay-console-admin"),
   ACCOUNT_ADMIN_CLIENT_SECRET: z.string().min(1).default("local-dev-only-account-admin-secret"),
@@ -63,6 +69,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publicOrigin: new URL(e.CONSOLE_PUBLIC_ORIGIN).origin,
     oidc: { issuer: e.OIDC_ISSUER, clientId: e.OIDC_CLIENT_ID, clientSecret: e.OIDC_CLIENT_SECRET },
     sessionSecret: e.SESSION_SECRET,
+    sso: { enabled: (e.OIDC_SSO_ENABLED ?? (production ? 'false' : 'true')) === 'true', aliases: {
+      ...(e.OIDC_SSO_MICROSOFT_ALIAS ? { microsoft: e.OIDC_SSO_MICROSOFT_ALIAS } : {}),
+      ...(e.OIDC_SSO_GOOGLE_ALIAS ? { google: e.OIDC_SSO_GOOGLE_ALIAS } : {}),
+      ...(e.OIDC_SSO_APPLE_ALIAS ? { apple: e.OIDC_SSO_APPLE_ALIAS } : {}),
+      ...(e.OIDC_SSO_COMPANY_ALIAS ? { company: e.OIDC_SSO_COMPANY_ALIAS } : {}),
+    } },
     accountAdmin: { clientId: e.ACCOUNT_ADMIN_CLIENT_ID, clientSecret: e.ACCOUNT_ADMIN_CLIENT_SECRET },
     goServices: parseGoServices(e.GO_SERVICES),
     dataSource: e.DATA_SOURCE,

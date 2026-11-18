@@ -31,7 +31,7 @@ export function GlobalSearch() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (e.key === "/" && !/input|textarea|select/i.test(t.tagName)) {
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") || (e.key === "/" && !/input|textarea|select/i.test(t.tagName))) {
         e.preventDefault();
         input.current?.focus();
       }
@@ -61,7 +61,7 @@ export function GlobalSearch() {
     <div className="search" ref={ref} style={{ width: "min(340px, 30vw)" }}>
       <Search size={14} className="lead" aria-hidden="true" />
       <input
-        ref={input} className="input" placeholder="Search IDs and records" role="combobox"
+        ref={input} className="input" placeholder="Search payments, merchants, transactions, settlements, or reports…" role="combobox"
         aria-expanded={open && dq.length >= 2} aria-controls={listId} aria-autocomplete="list"
         aria-activedescendant={shown[active] ? `${listId}-${active}` : undefined} aria-label="Global search"
         value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
@@ -72,7 +72,7 @@ export function GlobalSearch() {
           else if (e.key === "Escape") setOpen(false);
         }}
       />
-      {!q && <span className="kbd" aria-hidden="true">/</span>}
+      {!q && <span className="kbd" aria-hidden="true">Ctrl + K</span>}
       {open && dq.length >= 2 && (
         <div className="popover" style={{ left: 0, right: "auto", width: "min(420px, 90vw)" }}>
           <ul className="menu-list" role="listbox" id={listId} aria-label="Search results">

@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from "react-router";
 import { ErrorState } from "./components/States";
 import { useSession } from "./hooks/useSession";
 import { AppShell } from "./layouts/AppShell";
 import { isVisible, NAV, type NavItem, visibleNav } from "./navigation/navConfig";
-import { AreaPage } from "./pages/AreaPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ForbiddenRoute, NoAccessPage, NotFoundPage } from "./pages/MiscPages";
 import { OverviewPage } from "./pages/OverviewPage";
 import { UNAUTHENTICATED_EVENT } from "./services/http";
+
+const AreaPage = lazy(() => import("./pages/AreaPage").then((module) => ({ default: module.AreaPage })));
 
 /**
  * Shows an area only to roles that may see it; the server decides who that is.
@@ -22,7 +23,7 @@ function Area({ item }: { item: NavItem }) {
     if (home) return <Navigate to={home.path} replace />;
   }
   if (!me || !isVisible(item, me)) return <ForbiddenRoute />;
-  return item.key === "overview" ? <OverviewPage /> : <AreaPage key={item.key} item={item} />;
+  return item.key === "overview" ? <OverviewPage /> : <Suspense fallback={<div className="state" role="status">Loading workspace…</div>}><AreaPage key={item.key} item={item} /></Suspense>;
 }
 
 export const routes: RouteObject[] = [

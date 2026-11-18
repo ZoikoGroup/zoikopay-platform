@@ -1,46 +1,36 @@
-/*
- * Zoiko Pay Console design tokens.
- *
- * STRICT TWO-COLOUR SYSTEM: every colour below is pure black (#000) or pure
- * white (#fff), alone or as white at a given opacity over black. There is no
- * hue anywhere. Status is carried by icon shape, fill weight, pattern and text.
- *
- * Text opacity floor is 0.58, which keeps body text at ≥ 6:1 contrast on black
- * (WCAG 2.2 AA needs 4.5:1).
- */
+/* Zoiko Pay brand palette, approved from the November 17 design references. */
 :root {
-  color-scheme: dark;
-
+  color-scheme: light;
   --black: #000000;
   --white: #ffffff;
-
-  /* Surfaces: white layered over black */
-  --bg: var(--black);
-  --surface-1: rgba(255, 255, 255, 0.025);
-  --surface-2: rgba(255, 255, 255, 0.045);
-  --surface-3: rgba(255, 255, 255, 0.075);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-  --surface-press: rgba(255, 255, 255, 0.1);
-  --scrim: rgba(0, 0, 0, 0.72);
-
-  /* Lines */
-  --line-faint: rgba(255, 255, 255, 0.06);
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.2);
-  --line-max: rgba(255, 255, 255, 0.4);
-
-  /* Text */
-  --text: #ffffff;
-  --text-2: rgba(255, 255, 255, 0.76);
-  --text-3: rgba(255, 255, 255, 0.58);
-  --text-on-white: #000000;
-
-  /* Charts */
-  --chart-line: #ffffff;
-  --chart-area: rgba(255, 255, 255, 0.07);
-  --chart-bar: rgba(255, 255, 255, 0.18);
-  --chart-grid: rgba(255, 255, 255, 0.07);
-
+  --navy: #031b36;
+  --navy-deep: #02152b;
+  --brand: #008333;
+  --brand-bright: #00bd42;
+  --brand-soft: #eaf8ee;
+  --blue: #176bda;
+  --amber: #bb6c06;
+  --red: #c52c42;
+  --purple: #7d40cd;
+  --bg: #f3f7fd;
+  --surface-1: #ffffff;
+  --surface-2: #f6f9fe;
+  --surface-3: #edf3fa;
+  --surface-hover: #edf7f1;
+  --surface-press: #e2f2e7;
+  --scrim: rgba(3, 27, 54, 0.55);
+  --line-faint: #edf1f7;
+  --line: #dfe6ef;
+  --line-strong: #c6d1e0;
+  --line-max: #899bb1;
+  --text: #101a35;
+  --text-2: #44546b;
+  --text-3: #607087;
+  --text-on-white: #101a35;
+  --chart-line: #009b3b;
+  --chart-area: rgba(0, 189, 66, 0.13);
+  --chart-bar: rgba(0, 155, 59, 0.22);
+  --chart-grid: #e7edf5;
   /* Type */
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -69,7 +59,7 @@
   --radius: 10px;
   --radius-lg: 14px;
 
-  --sidebar-w: 248px;
+  --sidebar-w: 272px;
   --sidebar-w-collapsed: 64px;
   --header-h: 60px;
   --content-max: 1480px;
@@ -77,5 +67,5 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur: 140ms;
 
-  --focus-ring: 0 0 0 2px var(--black), 0 0 0 4px var(--white);
+  --focus-ring: 0 0 0 2px var(--white), 0 0 0 4px var(--brand);
 }

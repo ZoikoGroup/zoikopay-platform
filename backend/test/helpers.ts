@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { MemoryStore } from "express-session";
-import { pino } from "pino";
+import { pino, type Logger } from "pino";
 import { createApp, SESSION_COOKIE } from "../src/app.js";
 import type { Environment } from "../src/types/domain.js";
 import type { Config } from "../src/config.js";
@@ -65,13 +65,14 @@ export class FakeAccounts {
   }
 }
 
-export function makeTestApp(opts: { now?: () => number } = {}) {
+export function makeTestApp(opts: { now?: () => number; config?: Partial<Config>; idp?: FakeIdp; log?: Logger } = {}) {
   const store = new MemoryStore();
-  const idp = new FakeIdp();
+  const idp = opts.idp ?? new FakeIdp();
+  const config = { ...testConfig, ...opts.config };
   const accounts = new FakeAccounts();
-  const log = pino({ level: "silent" });
-  const health = new HealthMonitor([], testConfig.oidc.issuer, log);
-  const { app, services } = createApp({ config: testConfig, log, idp, accounts, sessionStore: store, health, now: opts.now });
+  const log = opts.log ?? pino({ level: "silent" });
+  const health = new HealthMonitor([], config.oidc.issuer, log);
+  const { app, services } = createApp({ config, log, idp, accounts, sessionStore: store, health, now: opts.now });
 
   /** Creates a real server-side session for a directory user and returns its signed cookie. */
   function loginAs(username: string, o: { environment?: Environment; loginAgoMs?: number } = {}): string {

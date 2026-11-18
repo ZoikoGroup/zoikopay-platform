@@ -70,8 +70,14 @@ const admin = client();
 await admin.login("super.admin");
 check("super.admin is denied transaction details", (await admin.get("/api/v1/payments")).status === 403);
 const adminKpis = await admin.get("/api/v1/overview/kpis?period=7d&currency=GBP");
-const vol = adminKpis.body?.data?.kpis?.find((k) => k.key === "volume");
-check("super.admin gets counts but no money amounts", vol?.restricted === true && vol?.value === null);
+check("super.admin cannot access merchant Overview", adminKpis.status === 403);
+const platform = await admin.get("/api/v1/platform/summary");
+const platformData = platform.body?.data;
+const forbiddenFields = ["amountMinor", "amount_minor", "customerEmail", "last4", "pi_", "username", "displayName", "secret"];
+check("super.admin gets platform counts without merchant payment details",
+  platform.status === 200 && Number.isInteger(platformData?.totals?.payments)
+  && platformData.totals.payments > 0
+  && forbiddenFields.every((field) => !JSON.stringify(platformData).includes(field)));
 const health = await admin.get("/api/v1/system/health");
 check("system health is probed live", health.body?.data?.source === "live-service",
   `${health.body?.data?.services?.filter((s) => s.ok).length}/${health.body?.data?.services?.length} ok`);
