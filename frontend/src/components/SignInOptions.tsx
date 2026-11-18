@@ -16,12 +16,12 @@ const OPTIONS: { id: SsoProviderId; label: string }[] = [
 const ERRORS: Record<string, string> = {
   SSO_SESSION_EXPIRED: 'This sign-in link expired or could not be verified. Choose a sign-in method again.',
   SSO_CANCELED: 'Single sign-on was canceled. Choose a sign-in method to try again.',
-  SSO_FAILED: 'Your identity could not be verified. Try again or use your work account below.',
-  SSO_UNAVAILABLE: 'Single sign-on is temporarily unavailable. Use your work account below.',
+  SSO_FAILED: 'Your identity could not be verified. Try again or use your work email and password.',
+  SSO_UNAVAILABLE: 'Single sign-on is temporarily unavailable. Use your work email and password.',
 };
 
 /** Native same-origin POST forms initiate login; codes and tokens stay out of application JavaScript. */
-export function SignInOptions() {
+export function SignInOptions({ compact = false }: { compact?: boolean }) {
   const [providers, setProviders] = useState<SsoProviderOption[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -38,9 +38,7 @@ export function SignInOptions() {
     });
     return () => controller.abort();
   }, []);
-  return <div className="auth-sso">
-    {callbackError && <p className="auth-sso-error" role="alert">{callbackError}</p>}
-    <div className="auth-sso-grid" aria-label="Other sign-in methods">{OPTIONS.map(({ id, label }) => {
+  const renderOption = ({ id, label }: typeof OPTIONS[number]) => {
       const enabled = providers.some((provider) => provider.id === id && provider.enabled);
       return <form key={id} method="post" action={'/auth/sso/' + id} onSubmit={(event) => { if (!enabled || starting) event.preventDefault(); else setStarting(id); }}>
         <button className="btn auth-provider-button" type="submit" disabled={!enabled || Boolean(starting)} title={!loaded ? 'Checking sign-in connection…' : !enabled ? 'This sign-in method is not connected to your workspace yet' : undefined}>
@@ -48,8 +46,12 @@ export function SignInOptions() {
           {loaded && !enabled && <span className="sr-only"> (not connected)</span>}
         </button>
       </form>;
-    })}</div>
-    <p className="auth-sso-availability" role="status">{!loaded ? 'Checking available sign-in methods…' : failed ? 'Single sign-on is temporarily unavailable. Use your account below.' : !providers.some((provider) => provider.enabled) ? 'Single sign-on is not connected. Use your account below.' : providers.some((provider) => !provider.enabled) ? 'Unconnected sign-in methods are unavailable for this workspace.' : 'Choose your organization’s sign-in method, or use your account below.'}</p>
-    <div className="auth-divider"><span />or sign in with email<span /></div>
+  };
+  return <div className="auth-sso">
+    <div className="auth-divider"><span />or continue with<span /></div>
+    {callbackError && <p className="auth-sso-error" role="alert">{callbackError}</p>}
+    <div className="auth-sso-grid" aria-label="Other sign-in methods">{(compact ? OPTIONS.slice(0, 2) : OPTIONS).map(renderOption)}</div>
+    {compact && <details className="auth-more-options"><summary>More sign-in options</summary><div className="auth-sso-grid">{OPTIONS.slice(2).map(renderOption)}</div></details>}
+    <p className="auth-sso-availability" role="status">{!loaded ? 'Checking available sign-in methods…' : failed ? 'Single sign-on is temporarily unavailable. Use your email and password.' : !providers.some((provider) => provider.enabled) ? 'Single sign-on is not connected. Use your email and password.' : providers.some((provider) => !provider.enabled) ? 'Unconnected sign-in methods are unavailable for this workspace.' : 'Choose your organization’s sign-in method, or use your email and password.'}</p>
   </div>;
 }

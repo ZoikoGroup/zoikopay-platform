@@ -6,13 +6,26 @@ import { KpiCard } from "./KpiCard";
 import { StatusBadge, toneOf } from "./StatusBadge";
 
 beforeEach(() => vi.spyOn(api, 'ssoProviders').mockResolvedValue({ data: { providers: [] }, meta: { requestId: 'test', environment: null, source: 'console', asOf: '2026-11-18T00:00:00Z' } }));
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function problem(status: number, code: string, title: string) {
   return new Response(JSON.stringify({ status, code, title }), { status, headers: { "content-type": "application/problem+json" } });
 }
 
 describe("LoginPage", () => {
+  it('remembers only the account identifier after a successful sign-in', async () => {
+    vi.spyOn(api, 'login').mockResolvedValue({ data: { username: 'ops.agent' }, meta: { requestId: 'test', environment: null, source: 'console', asOf: '' } });
+    const onSignedIn = vi.fn();
+    render(<LoginPage onSignedIn={onSignedIn} />);
+    fireEvent.change(screen.getByLabelText('Work email or username'), { target: { value: 'ops.agent' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } });
+    fireEvent.click(screen.getByLabelText('Remember email'));
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
+    expect(localStorage.getItem('zp.remembered-login')).toBe('ops.agent');
+    expect(JSON.stringify(localStorage)).not.toContain('secret-password');
+  });
+
   it("posts username and password to the console backend, then signs in", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { username: "ops.agent" } }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

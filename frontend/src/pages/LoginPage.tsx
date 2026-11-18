@@ -67,11 +67,11 @@ function PasswordChecklist({ password, username }: { password: string; username:
 
 const policyOk = (pw: string, u: string) => PASSWORD_RULES.every((r) => r.test(pw, u));
 
-function Field({ id, label, value, onChange, autoComplete, type = "text" }: { id: string; label: string; value: string; onChange: (v: string) => void; autoComplete: string; type?: string }) {
+function Field({ id, label, value, onChange, autoComplete, placeholder, type = "text" }: { id: string; label: string; value: string; onChange: (v: string) => void; autoComplete: string; placeholder?: string; type?: string }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} className="input input-lg" type={type} autoComplete={autoComplete} autoCapitalize="none" spellCheck={false}
+      <input id={id} className="input input-lg" type={type} placeholder={placeholder} autoComplete={autoComplete} autoCapitalize="none" spellCheck={false}
         value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
@@ -87,7 +87,8 @@ function Banner({ tone, children }: { tone: "error" | "ok"; children: ReactNode 
 }
 
 function SignInForm({ onSignedIn, initialError, notice, onChangePassword }: { onSignedIn: () => void; initialError?: string; notice?: string; onChangePassword: () => void }) {
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(() => { try { return localStorage.getItem('zp.remembered-login') ?? ''; } catch { return ''; } });
+  const [rememberEmail, setRememberEmail] = useState(() => { try { return Boolean(localStorage.getItem('zp.remembered-login')); } catch { return false; } });
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
@@ -98,6 +99,7 @@ function SignInForm({ onSignedIn, initialError, notice, onChangePassword }: { on
     setError(undefined);
     try {
       await api.login(username.trim(), password);
+      try { if (rememberEmail) localStorage.setItem('zp.remembered-login', username.trim()); else localStorage.removeItem('zp.remembered-login'); } catch { /* Sign-in does not depend on browser preference storage. */ }
       setPassword("");
       onSignedIn();
     } catch (err) {
@@ -110,9 +112,9 @@ function SignInForm({ onSignedIn, initialError, notice, onChangePassword }: { on
     <form className="stack" onSubmit={submit} noValidate>
       {notice && !error && <Banner tone="ok">{notice}</Banner>}
       {error && <Banner tone="error">{error}</Banner>}
-      <Field id="username" label="Work email or username" value={username} onChange={setUsername} autoComplete="username" />
+      <Field id="username" label="Work email or username" placeholder="name@company.com" value={username} onChange={setUsername} autoComplete="username" />
       <PasswordInput id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
-      <div className="auth-options"><span className="row"><Lock size={12} /> Secure workspace sign-in</span><button type="button" onClick={onChangePassword}>Change password?</button></div>
+      <div className="auth-options"><label><input type="checkbox" checked={rememberEmail} onChange={(event) => setRememberEmail(event.target.checked)} />Remember email</label><button type="button" onClick={onChangePassword}>Change password?</button></div>
       <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>{busy ? "Signing in…" : <>Log In <ArrowRight size={15} aria-hidden="true" /></>}</button>
     </form>
   );
@@ -200,11 +202,11 @@ function ChangePasswordForm({ onDone }: { onDone: (username: string) => void }) 
 export function LoginPage({ reason, onSignedIn }: { reason?: string; onSignedIn: () => void }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [notice, setNotice] = useState<string>();
-  const title = { signin: "Welcome back", create: "Create your account", change: "Change password" }[mode];
+  const title = { signin: "Welcome back!", create: "Create your account", change: "Change password" }[mode];
   const back = (msg: string) => { setNotice(msg); setMode("signin"); };
 
   return (
-    <main className="login">
+    <main className="login login-reference">
       <section className="login-art" aria-label="Zoiko Pay payment operations">
         <Brand light />
         <div className="login-hero-copy">
@@ -225,10 +227,9 @@ export function LoginPage({ reason, onSignedIn }: { reason?: string; onSignedIn:
           <div role="tablist" aria-label="Account" className="auth-tabs">
             {(["signin", "create", "change"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setNotice(undefined); }}>{{ signin: "Login", create: "Register", change: "Change Password" }[m]}</button>)}
           </div>
-          <Brand />
           <div className="auth-heading"><h1 id="login-title">{title}</h1><p className="muted">{mode === 'signin' ? 'Sign in to your Zoiko Pay workspace.' : mode === 'create' ? 'Start with a secure Zoiko iD account.' : 'Verify your current password to choose a new one.'}</p></div>
-          {mode === 'signin' && <SignInOptions />}
           {mode === 'signin' && <SignInForm onSignedIn={onSignedIn} notice={notice} onChangePassword={() => setMode('change')} initialError={reason === 'SESSION_EXPIRED' ? 'Your session expired. Sign in again.' : undefined} />}
+          {mode === 'signin' && <SignInOptions compact />}
           {mode === 'create' && <CreateAccountForm onDone={(u) => back('Account ' + u + ' created. Sign in; an administrator must assign your role.')} />}
           {mode === 'change' && <ChangePasswordForm onDone={(u) => back('Password changed for ' + u + '. Sign in with your new password.')} />}
           {mode === 'signin' && <p className="auth-switch">New to Zoiko Pay? <button type="button" onClick={() => setMode('create')}>Register</button></p>}
