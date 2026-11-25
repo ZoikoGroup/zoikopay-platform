@@ -12,7 +12,7 @@ import (
 )
 
 func TestNewHasPrefixAndParses(t *testing.T) {
-	for _, p := range []ids.Prefix{ids.PaymentIntent, ids.Operation, ids.Refund, ids.Merchant} {
+	for _, p := range []ids.Prefix{ids.PaymentIntent, ids.Operation, ids.Refund, ids.Merchant, ids.Tenant} {
 		id := ids.New(p)
 		if !strings.HasPrefix(id, string(p)) || len(id) != len(p)+32 {
 			t.Fatalf("New(%s) = %q", p, id)

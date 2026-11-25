@@ -93,8 +93,9 @@ suffix as opaque.
 | `op_` | Payment operation (capture, cancel, refund attempt …) | Consistent in 14 specs (02-07, 04-08, 06-01 …) |
 | `re_` | Refund | **No spec defines a refund prefix**; proposed here |
 | `mer_` | Merchant | Used by seven specs, including 06-01 and 04-06. **Conflict:** 04-03 uses `mrch_` (Q10) |
+| `ten_` | Tenant | **Proposed**, not yet frozen: spec examples only (`ten_example_01`, `ten_demo`). First built by BC-01 `merchant.tenants` (Q15) |
 
-Other prefixes in spec examples (`evt_` events, `ten_` tenants, `req_`
+Other prefixes in spec examples (`evt_` events, `req_`
 request IDs, `cell_` regional cells) are recorded in Q10 and decided when the
 resource is first built.
 

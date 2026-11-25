@@ -34,6 +34,8 @@ const (
 	Operation     Prefix = "op_"
 	Refund        Prefix = "re_"
 	Merchant      Prefix = "mer_"
+	// Tenant is proposed, not yet frozen: first built by BC-01 (ADR 0001 §6, Q15).
+	Tenant Prefix = "ten_"
 )
 
 const suffixLen = 32
