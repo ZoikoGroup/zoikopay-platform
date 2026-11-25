@@ -3,137 +3,21 @@
 package store_test
 
 import (
-	"context"
-	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zoiko/zoikopay/internal/platform/db"
-	"github.com/zoiko/zoikopay/internal/platform/db/dbtest"
 	"github.com/zoiko/zoikopay/internal/platform/ids"
-	"github.com/zoiko/zoikopay/internal/platform/migrate"
 )
-
-// SQLSTATE codes the tests expect.
-const (
-	insufficientPrivilege = "42501" // missing grant, or a row-level security WITH CHECK failure
-	restrictViolation     = "23001" // raised by the merchant guards
-	checkViolation        = "23514"
-	foreignKeyViolation   = "23503"
-	uniqueViolation       = "23505"
-)
-
-var t0 = time.Date(2026, 11, 25, 9, 0, 0, 0, time.UTC)
-
-type fixture struct {
-	ctx context.Context
-	gw  *pgxpool.Pool // zp_gateway: BC-01's runtime role (deployable D1)
-	mig *pgxpool.Pool // zp_migrator: owns the schema
-}
-
-// scope is a full tenant context for db.InTenantTx. Cell and legal entity are
-// placeholders: the merchant tables isolate by tenant only.
-func scope(tenantID string) db.Tenant {
-	return db.Tenant{Environment: "TEST", CellID: "cell_uk_01", LegalEntityID: "le_uk_01", TenantID: tenantID}
-}
-
-// exec runs sql in tenant's context (or with no tenant context when tenant is
-// empty) and returns the number of rows affected.
-func (f *fixture) exec(p *pgxpool.Pool, tenant, sql string, args ...any) (int64, error) {
-	if tenant == "" {
-		tag, err := p.Exec(f.ctx, sql, args...)
-		return tag.RowsAffected(), err
-	}
-	var n int64
-	err := db.InTenantTx(f.ctx, p, scope(tenant), func(tx pgx.Tx) error {
-		tag, err := tx.Exec(f.ctx, sql, args...)
-		n = tag.RowsAffected()
-		return err
-	})
-	return n, err
-}
-
-func (f *fixture) count(t *testing.T, p *pgxpool.Pool, tenant, sql string, args ...any) int {
-	t.Helper()
-	var n int
-	query := func(q interface {
-		QueryRow(context.Context, string, ...any) pgx.Row
-	}) error {
-		return q.QueryRow(f.ctx, sql, args...).Scan(&n)
-	}
-	var err error
-	if tenant == "" {
-		err = query(p)
-	} else {
-		err = db.InTenantTx(f.ctx, p, scope(tenant), func(tx pgx.Tx) error { return query(tx) })
-	}
-	if err != nil {
-		t.Fatalf("count %q: %v", sql, err)
-	}
-	return n
-}
-
-const insertTenant = `INSERT INTO merchant.tenants (id, tenant_id, display_name, created_at_utc, updated_at_utc)
-	VALUES ($1::uuid, $2, $3, $4, $4)`
-
-const insertMerchant = `INSERT INTO merchant.merchants
-	(id, merchant_id, tenant_id, environment, display_name, status, revision, created_at_utc, updated_at_utc)
-	VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $8)`
-
-func (f *fixture) newTenant(t *testing.T, name string) string {
-	t.Helper()
-	id := ids.NewPublic(ids.Tenant)
-	if _, err := f.exec(f.gw, id, insertTenant, ids.NewInternal(), id, name, t0); err != nil {
-		t.Fatalf("create tenant %s: %v", name, err)
-	}
-	return id
-}
-
-func (f *fixture) newMerchant(t *testing.T, tenant, name string) string {
-	t.Helper()
-	id := ids.NewPublic(ids.Merchant)
-	if _, err := f.exec(f.gw, tenant, insertMerchant, ids.NewInternal(), id, tenant, "TEST", name, "DRAFT", 1, t0); err != nil {
-		t.Fatalf("create merchant %s: %v", name, err)
-	}
-	return id
-}
-
-func sqlState(err error) string {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		return pgErr.Code
-	}
-	if err != nil {
-		return "error: " + err.Error()
-	}
-	return "no error"
-}
-
-func wantState(t *testing.T, what string, err error, want string) {
-	t.Helper()
-	if got := sqlState(err); got != want {
-		t.Errorf("%s: got %s, want SQLSTATE %s", what, got, want)
-	}
-}
 
 // TestTenantIsolation checks BC-01's tenants and merchants tables against the
 // real migrations, applied by the approved runner exactly as `make migrate`
 // does: forced row-level security (03-04 CELL-002, ADR 0005 §6), least
 // privilege, immutable identity and no deletion (04-03 §2, MER-INV-24).
 func TestTenantIsolation(t *testing.T) {
-	ctx := context.Background()
-	pg := dbtest.Start(t)
-	r := migrate.Runner{Pool: pg.Pool(t, "zp_migrator"), Source: os.DirFS(filepath.Join(dbtest.RepoRoot(t), "db", "migrations"))}
-	if _, err := r.Up(ctx); err != nil {
-		t.Fatalf("apply real migrations: %v", err)
-	}
-	f := &fixture{ctx: ctx, gw: pg.Pool(t, "zp_gateway"), mig: pg.Pool(t, "zp_migrator")}
+	f := setup(t)
+	pg := f.pg
 
 	// Synthetic tenants: A has two merchants, B has one.
 	tenantA := f.newTenant(t, "Synthetic Tenant A")
@@ -275,8 +159,12 @@ func TestTenantIsolation(t *testing.T) {
 		wantState(t, "owner DELETE merchant", err, restrictViolation)
 		_, err = f.exec(f.mig, tenantA, `DELETE FROM merchant.tenants WHERE tenant_id = $1`, tenantA)
 		wantState(t, "owner DELETE tenant", err, restrictViolation)
-		_, err = f.exec(f.mig, "", `TRUNCATE merchant.merchants`)
-		wantState(t, "owner TRUNCATE merchants", err, restrictViolation)
+		// CASCADE, because memberships reference merchants: without it PostgreSQL
+		// refuses before the guard runs. With it, the guards must still refuse.
+		_, err = f.exec(f.mig, "", `TRUNCATE merchant.merchants CASCADE`)
+		wantState(t, "owner TRUNCATE merchants CASCADE", err, restrictViolation)
+		_, err = f.exec(f.mig, "", `TRUNCATE merchant.tenants CASCADE`)
+		wantState(t, "owner TRUNCATE tenants CASCADE", err, restrictViolation)
 		if n := f.count(t, f.gw, tenantA, `SELECT count(*) FROM merchant.merchants`); n != 2 {
 			t.Errorf("tenant A has %d merchants after delete attempts, want 2", n)
 		}
