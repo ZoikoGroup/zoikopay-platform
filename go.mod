@@ -3,6 +3,7 @@ module github.com/zoiko/zoikopay
 go 1.26.11
 
 require (
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/oapi-codegen/runtime v1.9.0
 	github.com/testcontainers/testcontainers-go v0.45.0
