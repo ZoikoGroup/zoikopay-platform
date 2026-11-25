@@ -31,6 +31,12 @@ fi
 export ZP_TEMPORAL_ADDR="localhost:${ZP_TEMPORAL_PORT:-7233}"
 export ZP_TEMPORAL_NAMESPACE="zoikopay-execution"
 export ZP_OIDC_ISSUER="http://localhost:${ZP_KEYCLOAK_PORT:-8180}/realms/zoikopay"
+# Access-token verification (ADR 0007). Public values only; no client secret.
+export ZP_OIDC_AUDIENCE="${ZP_OIDC_AUDIENCE:-zoikopay-gateway}"
+export ZP_OIDC_JWKS_URL="${ZP_OIDC_ISSUER}/protocol/openid-connect/certs"
+export ZP_OIDC_REQUIRED_CLAIMS="${ZP_OIDC_REQUIRED_CLAIMS:-typ=Bearer}"
+# The local stack is a sandbox (OPEN_QUESTIONS Q37 37.14).
+export ZP_ENVIRONMENT="${ZP_ENVIRONMENT:-TEST}"
 export ZP_S3_ENDPOINT="http://localhost:${ZP_MINIO_PORT:-9000}"
 
 exec "$@"

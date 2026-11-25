@@ -8,10 +8,104 @@ package publicapi
 import (
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for MerchantObject.
+const (
+	MerchantObjectMerchant MerchantObject = "merchant"
+)
+
+// Valid indicates whether the value is a known member of the MerchantObject enum.
+func (e MerchantObject) Valid() bool {
+	switch e {
+	case MerchantObjectMerchant:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MerchantStatus.
+const (
+	Closed           MerchantStatus = "closed"
+	Draft            MerchantStatus = "draft"
+	NeedsInformation MerchantStatus = "needs_information"
+	Rejected         MerchantStatus = "rejected"
+	Submitted        MerchantStatus = "submitted"
+	Suspended        MerchantStatus = "suspended"
+	UnderReview      MerchantStatus = "under_review"
+	Verified         MerchantStatus = "verified"
+)
+
+// Valid indicates whether the value is a known member of the MerchantStatus enum.
+func (e MerchantStatus) Valid() bool {
+	switch e {
+	case Closed:
+		return true
+	case Draft:
+		return true
+	case NeedsInformation:
+		return true
+	case Rejected:
+		return true
+	case Submitted:
+		return true
+	case Suspended:
+		return true
+	case UnderReview:
+		return true
+	case Verified:
+		return true
+	default:
+		return false
+	}
+}
+
+// Merchant defines model for Merchant.
+type Merchant struct {
+	CreatedAt   time.Time      `json:"created_at"`
+	DisplayName string         `json:"display_name"`
+	Id          string         `json:"id"`
+	Object      MerchantObject `json:"object"`
+	Revision    int64          `json:"revision"`
+
+	// Status Registration and review lifecycle only (04-03 §4); never proof of payment eligibility.
+	Status    MerchantStatus `json:"status"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// MerchantObject defines model for Merchant.Object.
+type MerchantObject string
+
+// MerchantStatus Registration and review lifecycle only (04-03 §4); never proof of payment eligibility.
+type MerchantStatus string
+
+// Problem defines model for Problem.
+type Problem struct {
+	Code      string  `json:"code"`
+	Detail    *string `json:"detail,omitempty"`
+	RequestId *string `json:"request_id,omitempty"`
+	Retryable *bool   `json:"retryable,omitempty"`
+	Status    int     `json:"status"`
+	Title     string  `json:"title"`
+	TraceId   string  `json:"trace_id"`
+	Type      string  `json:"type"`
+}
+
+// MerchantId defines model for MerchantId.
+type MerchantId = string
+
+// Unauthenticated defines model for Unauthenticated.
+type Unauthenticated = Problem
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetMerchant Retrieve a merchant
+	// (GET /merchants/{merchant_id})
+	GetMerchant(w http.ResponseWriter, r *http.Request, merchantId MerchantId)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -22,6 +116,32 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetMerchant operation middleware
+func (siw *ServerInterfaceWrapper) GetMerchant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "merchant_id" -------------
+	var merchantId MerchantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "merchant_id", r.PathValue("merchant_id"), &merchantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "merchant_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMerchant(w, r, merchantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 type UnescapedCookieParamError struct {
 	ParamName string
@@ -136,6 +256,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 	}
+
+	wrapper := ServerInterfaceWrapper{
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
+	}
+
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/merchants/{merchant_id}", wrapper.GetMerchant)
 
 	return m
 }

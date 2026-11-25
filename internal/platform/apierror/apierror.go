@@ -72,6 +72,7 @@ type Problem struct {
 	Instance    string       `json:"instance,omitempty"`
 	Code        Code         `json:"code"`
 	RequestID   string       `json:"request_id,omitempty"`
+	TraceID     string       `json:"trace_id,omitempty"` // OPEN_QUESTIONS Q37 37.1
 	OperationID string       `json:"operation_id,omitempty"`
 	Retryable   bool         `json:"retryable"`
 	Errors      []FieldError `json:"errors,omitempty"`

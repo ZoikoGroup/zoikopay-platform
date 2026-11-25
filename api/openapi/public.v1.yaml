@@ -1,10 +1,15 @@
-# Placeholder contract (M0 skeleton). Operations are added in M2 under
-# ADR 0001: snake_case paths, amount_minor as a decimal string, RFC 9457 errors.
+# Public merchant API of deployable D1 gateway (04-01; merchant paths from 04-03 §5).
+# Wire rules follow ADR 0001: snake_case paths, lower-case enum values (Q29),
+# RFC 9457 errors. Authentication and response codes: OPEN_QUESTIONS Q37.
 openapi: 3.1.0
 info:
   title: ZoikoPay Merchant API
-  version: 0.0.0
-  description: Public merchant API served by deployable D1 gateway (spec 04-01).
+  version: 0.1.0
+  description: >-
+    Public merchant API served by deployable D1 gateway (spec 04-01). Every
+    request needs an access token from the configured identity issuer (ADR 0007);
+    tenant and role come only from Zoiko Pay's memberships, never from the token,
+    headers, query or body. Every response carries X-Trace-Id.
   contact:
     name: ZoikoPay Engineering
   license:
@@ -12,7 +17,99 @@ info:
     identifier: LicenseRef-Proprietary
 servers:
   - url: http://localhost:8080/v1
+security:
+  - bearer_token: []
 tags:
-  - name: health
-    description: Placeholder tag until M2 adds operations.
-paths: {}
+  - name: merchants
+    description: Merchant profiles (04-03).
+paths:
+  /merchants/{merchant_id}:
+    get:
+      operationId: getMerchant
+      tags: [merchants]
+      summary: Retrieve a merchant
+      description: >-
+        Returns a merchant the caller's memberships cover (02-02 MERCHANT.PROFILE.READ:
+        MOWN, MOPS, MFIN, MVIEW). A merchant outside the caller's grants, in another
+        environment, or that does not exist returns the same 404 (Q37 37.5).
+      parameters:
+        - $ref: '#/components/parameters/MerchantId'
+      responses:
+        '200':
+          description: The merchant.
+          headers:
+            ETag:
+              description: Merchant revision, for If-Match on later updates (04-03).
+              schema: {type: string}
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Merchant'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    bearer_token:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token for audience zoikopay-gateway (ADR 0007).
+  parameters:
+    MerchantId:
+      name: merchant_id
+      in: path
+      required: true
+      description: Merchant id (mer_...). A malformed id returns 404 (Q37 37.5).
+      schema: {type: string}
+  headers:
+    TraceId:
+      description: Server-generated trace ID of this request (Q37 37.1).
+      schema: {type: string, pattern: '^[0-9a-f]{32}$'}
+  responses:
+    Problem:
+      description: RFC 9457 problem details (04-01 §8).
+      headers:
+        X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Unauthenticated:
+      description: No valid access token (Q37 37.3).
+      headers:
+        WWW-Authenticate:
+          description: Bearer challenge (RFC 6750).
+          schema: {type: string}
+        X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Merchant:
+      type: object
+      additionalProperties: false
+      required: [id, object, display_name, status, revision, created_at, updated_at]
+      properties:
+        id: {type: string, pattern: '^mer_[0-9a-f]{32}$'}
+        object: {type: string, enum: [merchant]}
+        display_name: {type: string}
+        status:
+          type: string
+          description: Registration and review lifecycle only (04-03 §4); never proof of payment eligibility.
+          enum: [draft, submitted, under_review, needs_information, verified, rejected, suspended, closed]
+        revision: {type: integer, format: int64, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Problem:
+      type: object
+      required: [type, title, status, code, trace_id]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code: {type: string}
+        request_id: {type: string}
+        trace_id: {type: string, pattern: '^[0-9a-f]{32}$'}
+        retryable: {type: boolean}

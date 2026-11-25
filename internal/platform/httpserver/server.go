@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/zoiko/zoikopay/internal/platform/health"
+	"github.com/zoiko/zoikopay/internal/platform/trace"
 )
 
 // Config holds the listener settings for one binary.
@@ -56,8 +57,9 @@ func New(cfg Config, log *slog.Logger) *Server {
 // Mux returns the router so binaries can mount their handlers.
 func (s *Server) Mux() *http.ServeMux { return s.mux }
 
-// Handler exposes the full handler, mainly for tests.
-func (s *Server) Handler() http.Handler { return s.mux }
+// Handler is the full handler: every route, health included, behind the trace
+// middleware, so every response carries X-Trace-Id (OPEN_QUESTIONS Q37 37.1).
+func (s *Server) Handler() http.Handler { return trace.Middleware(s.log, s.mux) }
 
 func (s *Server) livez(w http.ResponseWriter, _ *http.Request) {
 	writeText(w, http.StatusOK, "ok")
@@ -148,7 +150,7 @@ func (s *Server) Run(ctx context.Context) error {
 // Serve is Run with a caller-supplied listener (used by tests).
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	srv := &http.Server{
-		Handler:           s.mux,
+		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
