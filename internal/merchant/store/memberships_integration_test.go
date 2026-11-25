@@ -16,7 +16,7 @@ import (
 // never be treated as one person.
 const (
 	keycloak = "http://localhost:8180/realms/zoikopay"
-	other    = "https://other-issuer.example.test/auth/v1"
+	other    = "https://other-issuer.example.test/realms/other"
 )
 
 var (
@@ -31,11 +31,16 @@ var (
 
 const insertMembership = `INSERT INTO merchant.memberships
 	(id, issuer, subject, tenant_id, merchant_id, environment, persona,
-	 granted_by_issuer, granted_by_subject, approved_by_issuer, approved_by_subject, granted_at_utc)
-	VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+	 granted_by_issuer, granted_by_subject, approved_by_issuer, approved_by_subject, granted_at_utc,
+	 effective_from_utc, expires_at_utc)
+	VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 const revokeMembership = `UPDATE merchant.memberships
 	SET revoked_at_utc = $2, revoked_by_issuer = $3, revoked_by_subject = $4 WHERE id = $1::uuid`
+
+// grantTime is when fixture grants are approved: an hour ago on the real
+// clock, because row-level security compares validity with the database's now().
+var grantTime = time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 
 type grant struct {
 	member         db.Subject
@@ -44,6 +49,8 @@ type grant struct {
 	environment    string // default TEST
 	persona        string
 	maker, checker db.Subject // default maker and checker
+	effectiveFrom  time.Time  // default grantTime
+	expiresAt      time.Time  // default grantTime + 48h
 }
 
 // insertGrant writes g under a and returns the membership's internal ID.
@@ -57,13 +64,20 @@ func (f *fixture) insertGrant(a access, g grant) (string, error) {
 	if g.checker == (db.Subject{}) {
 		g.checker = checker
 	}
+	if g.effectiveFrom.IsZero() {
+		g.effectiveFrom = grantTime
+	}
+	if g.expiresAt.IsZero() {
+		g.expiresAt = grantTime.Add(48 * time.Hour)
+	}
 	var merchantID any
 	if g.merchant != "" {
 		merchantID = g.merchant
 	}
 	id := ids.NewInternal()
 	_, err := f.execAs(f.gw, a, insertMembership, id, g.member.Issuer, g.member.Subject, g.tenant, merchantID,
-		g.environment, g.persona, g.maker.Issuer, g.maker.Subject, g.checker.Issuer, g.checker.Subject, t0)
+		g.environment, g.persona, g.maker.Issuer, g.maker.Subject, g.checker.Issuer, g.checker.Subject, grantTime,
+		g.effectiveFrom, g.expiresAt)
 	return id, err
 }
 
@@ -144,7 +158,7 @@ func TestMemberships(t *testing.T) {
 	t.Run("the subject context cannot grant or revoke", func(t *testing.T) {
 		_, err := f.insertGrant(asSubject(alice), grant{member: alice, tenant: tenantA, persona: "MDEV"})
 		wantState(t, "grant with only a subject context", err, insufficientPrivilege)
-		n, err := f.execAs(f.gw, asSubject(carol), revokeMembership, carolGrant, t0.Add(time.Minute), carol.Issuer, carol.Subject)
+		n, err := f.execAs(f.gw, asSubject(carol), revokeMembership, carolGrant, grantTime.Add(time.Minute), carol.Issuer, carol.Subject)
 		if err != nil || n != 0 {
 			t.Errorf("revoke with only a subject context: %d rows, %v; want 0 rows", n, err)
 		}
@@ -156,7 +170,7 @@ func TestMemberships(t *testing.T) {
 		if n := f.countAs(t, f.gw, asSubject(carol), countMemberships); n != 1 {
 			t.Fatalf("carol sees %d memberships before revocation, want 1", n)
 		}
-		n, err := f.exec(f.gw, tenantA, revokeMembership, carolGrant, t0.Add(time.Hour), checker.Issuer, checker.Subject)
+		n, err := f.exec(f.gw, tenantA, revokeMembership, carolGrant, grantTime.Add(time.Hour), checker.Issuer, checker.Subject)
 		if err != nil || n != 1 {
 			t.Fatalf("revoke carol: %d rows, %v", n, err)
 		}
@@ -170,7 +184,7 @@ func TestMemberships(t *testing.T) {
 	})
 
 	t.Run("revocation is final and complete", func(t *testing.T) {
-		later := t0.Add(2 * time.Hour)
+		later := grantTime.Add(2 * time.Hour)
 		_, err := f.exec(f.gw, tenantA, revokeMembership, carolGrant, later, checker.Issuer, checker.Subject)
 		wantState(t, "revoke an already revoked grant again", err, restrictViolation)
 		_, err = f.exec(f.gw, tenantA, `UPDATE merchant.memberships SET revoked_at_utc = NULL, revoked_by_issuer = NULL, revoked_by_subject = NULL WHERE id = $1::uuid`, carolGrant)
@@ -179,7 +193,7 @@ func TestMemberships(t *testing.T) {
 		active := f.mustGrant(t, grant{member: carol, tenant: tenantA, merchant: merA1, persona: "MVIEW"})
 		_, err = f.exec(f.gw, tenantA, `UPDATE merchant.memberships SET revoked_at_utc = $2 WHERE id = $1::uuid`, active, later)
 		wantState(t, "revocation without who revoked", err, checkViolation)
-		_, err = f.exec(f.gw, tenantA, revokeMembership, active, t0.Add(-time.Hour), checker.Issuer, checker.Subject)
+		_, err = f.exec(f.gw, tenantA, revokeMembership, active, grantTime.Add(-time.Hour), checker.Issuer, checker.Subject)
 		wantState(t, "revocation dated before the grant", err, checkViolation)
 		_, err = f.exec(f.gw, tenantA, revokeMembership, active, later, "", "")
 		wantState(t, "revocation by an empty identity", err, checkViolation)
@@ -234,11 +248,13 @@ func TestMemberships(t *testing.T) {
 		for _, set := range []string{
 			"persona = 'MOWN'", "tenant_id = '" + tenantB + "'", "subject = 'someone-else'", "issuer = '" + other + "'",
 			"merchant_id = NULL", "environment = 'LIVE'", "approved_by_subject = 'x'", "granted_at_utc = now()",
+			"expires_at_utc = expires_at_utc + interval '1 year'", "effective_from_utc = effective_from_utc - interval '1 day'",
 		} {
 			_, err := f.exec(f.gw, tenantA, `UPDATE merchant.memberships SET `+set+` WHERE subject = $1`, bob.Subject)
 			wantState(t, "zp_gateway SET "+set, err, insufficientPrivilege)
 		}
-		for _, set := range []string{"persona = 'MOWN'", "merchant_id = NULL", "approved_by_subject = 'x'"} {
+		for _, set := range []string{"persona = 'MOWN'", "merchant_id = NULL", "approved_by_subject = 'x'",
+			"expires_at_utc = expires_at_utc + interval '1 year'", "effective_from_utc = effective_from_utc - interval '1 day'"} {
 			_, err := f.exec(f.mig, tenantA, `UPDATE merchant.memberships SET `+set+` WHERE subject = $1`, bob.Subject)
 			wantState(t, "owner SET "+set, err, restrictViolation)
 		}
