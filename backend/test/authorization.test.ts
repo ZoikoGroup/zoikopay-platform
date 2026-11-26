@@ -1,6 +1,10 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { FIXTURE_IDS } from "../src/database/fixtures.js";
 import { makeTestApp, ORIGIN } from "./helpers.js";
+
+const T = FIXTURE_IDS.tenants;
+const M = FIXTURE_IDS.merchants;
 
 interface PaymentRow { id: string; merchantId: string; legalEntityId: string; method: unknown; customerEmailMasked: string; environment: string }
 
@@ -93,12 +97,12 @@ describe("tenant and legal-entity isolation", () => {
   it("limits a merchant operator to their own merchant", async () => {
     const rows = await allPayments(app, loginAs("merchant.ops"));
     expect(rows.length).toBeGreaterThan(0);
-    expect(new Set(rows.map((r) => r.merchantId))).toEqual(new Set(["mer_northwind_uk"]));
+    expect(new Set(rows.map((r) => r.merchantId))).toEqual(new Set([M.northwindUk]));
   });
 
   it("limits a merchant owner to their own tenant", async () => {
     const rows = await allPayments(app, loginAs("merchant.owner"));
-    expect(new Set(rows.map((r) => r.merchantId))).toEqual(new Set(["mer_northwind_uk", "mer_northwind_eu"]));
+    expect(new Set(rows.map((r) => r.merchantId))).toEqual(new Set([M.northwindUk, M.northwindEu]));
   });
 
   it("limits an internal agent to their legal entity", async () => {
@@ -107,7 +111,7 @@ describe("tenant and legal-entity isolation", () => {
   });
 
   it("answers 404, not 403, for another tenant's record so IDs cannot be probed", async () => {
-    const foreign = services.data.payments("TEST").find((p) => p.tenantId === "ten_alder")!;
+    const foreign = services.data.payments("TEST").find((p) => p.tenantId === T.alder)!;
     const res = await request(app).get(`/api/v1/payments/${foreign.id}`).set("Cookie", loginAs("merchant.ops"));
     expect(res.status).toBe(404);
     expect(services.audit.list({ action: "payments.read", outcome: "DENIED" }).at(-1)?.resource?.id).toBe(foreign.id);
@@ -115,16 +119,16 @@ describe("tenant and legal-entity isolation", () => {
 
   it("ignores filters that point outside the caller's scope", async () => {
     const cookie = loginAs("merchant.ops");
-    const res = await request(app).get("/api/v1/payments?merchantId=mer_alder_books").set("Cookie", cookie);
+    const res = await request(app).get(`/api/v1/payments?merchantId=${M.alderBooks}`).set("Cookie", cookie);
     expect(res.body.data.total).toBe(0);
-    const k = await request(app).get("/api/v1/overview/kpis?merchantId=mer_alder_books").set("Cookie", cookie);
+    const k = await request(app).get(`/api/v1/overview/kpis?merchantId=${M.alderBooks}`).set("Cookie", cookie);
     expect(k.status).toBe(404);
   });
 
   it("keeps recent activity inside the caller's scope", async () => {
     const res = await request(app).get("/api/v1/overview/recent-activity").set("Cookie", loginAs("merchant.ops"));
     expect(res.status).toBe(200);
-    expect(res.body.data.every((a: { merchantId: string }) => a.merchantId === "mer_northwind_uk")).toBe(true);
+    expect(res.body.data.every((a: { merchantId: string }) => a.merchantId === M.northwindUk)).toBe(true);
   });
 });
 

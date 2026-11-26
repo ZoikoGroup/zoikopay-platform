@@ -46,9 +46,8 @@ export class NotificationService {
 
   list(s: Services, ctx: CallContext): Notification[] {
     const seen = this.read.get(ctx.principal.sub) ?? new Set<string>();
-    const access = s.access.actionable(ctx).map((a) => ({ screenId: ACCESS_SCREEN, recordId: a.sub, label: a.label, at: a.at }));
     const xa = s.exceptional.actionable(s, ctx).map((a) => ({ screenId: a.screenId, recordId: a.id, label: a.label, at: a.at }));
-    return [...access, ...xa, ...s.screens.actionable(s, ctx)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30).map((a) => {
+    return [...xa, ...s.screens.actionable(s, ctx)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30).map((a) => {
       const id = `n_${a.screenId}_${a.recordId}`;
       return { id, at: a.at, title: a.label, screenId: a.screenId, recordId: a.recordId, read: seen.has(id) };
     });

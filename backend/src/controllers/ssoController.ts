@@ -56,7 +56,7 @@ export function ssoController(config: Config, idp: IdentityProvider, services: S
         const callback = new URL(pending.redirectUri);
         callback.search = new URL(req.originalUrl, config.publicOrigin).search;
         const claims = await idp.authorizationCallback(callback, pending);
-        await establishLogin(req, claims, services, pending.provider);
+        await establishLogin(req, claims, services, idp, pending.provider);
         await save(req);
         res.redirect(303, '/');
       } catch {

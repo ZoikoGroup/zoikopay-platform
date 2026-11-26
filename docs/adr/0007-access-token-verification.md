@@ -76,7 +76,7 @@ code change.
 | Code | New `internal/platform/authn`. Consumed by `internal/platform/authz` (principal resolution), which takes only its `Identity`. |
 | Deployables | No runtime change yet: the verifier is not mounted on any route. The first user will be D1 `gateway` (plan step 6). |
 | Identity provider configuration | `deploy/compose/keycloak/zoikopay-realm.json`: audience mapper on the `zoikopay-console` client. Local stack only. |
-| Admin console (BFF) | No code change. Its sign-in reads ID-token claims, which the mapper does not touch; its access tokens now also carry `aud: zoikopay-gateway`. |
+| Admin console (BFF) | No code change. Its sign-in reads ID-token claims, which the mapper does not touch; its access tokens now also carry `aud: zoikopay-gateway`. Later (plan step 8, OPEN_QUESTIONS Q39): the BFF keeps the access token server-side and sends it to the gateway's `GET /v1/principal` to read the user's own grants. |
 | Regional cells | No cell-specific behaviour; one issuer per deployment. Cell scoping of authority is out of scope (OPEN_QUESTIONS 36.17). |
 | Data and money | No database change; no money, ledger or journal behaviour, so no CFO or Controller concurrence is required (01-02 D-02). |
 | Dependencies | `github.com/go-jose/go-jose/v4` v4.1.9; `govulncheck` found no vulnerabilities on 2026-11-25. |

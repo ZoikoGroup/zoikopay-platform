@@ -38,8 +38,14 @@ It must not:
 The Go APIs do not exist yet, so the BFF currently:
 - serves deterministic development fixtures for **TEST only**, always labelled
   `source: "fixture"`, and refuses LIVE with `503 LIVE_DATA_UNAVAILABLE`;
-- keeps memberships and the audit chain in memory. These move to
-  BC-01/BC-02 and the governance evidence store.
+- keeps the console audit chain in memory. It moves to the governance
+  evidence store.
+
+Memberships are no longer in memory (2026-11-26, OPEN_QUESTIONS Q39): roles
+and scope come only from BC-01's `merchant.memberships`, read on every request
+through the gateway's `GET /v1/principal` with the user's own access token.
+Platform staff hold no grant there yet, so they have no access, and role
+administration on the Access screen is refused until Go provides it.
 
 The console has a sign-in page, the Overview dashboard, the 12 Business
 Requirements §07 side-rail areas, and three areas outside §07 (Access,

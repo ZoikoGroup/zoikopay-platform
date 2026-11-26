@@ -16,7 +16,7 @@ export function inScope(p: Principal, r: ScopedResource): boolean {
   const s = p.scope;
   if (r.environment !== p.environment || !s.environments.includes(r.environment)) return false;
   if (!s.legalEntityIds.includes(r.legalEntityId)) return false;
-  if (s.tenantIds !== "*" && !s.tenantIds.includes(r.tenantId)) return false;
+  if (!s.tenantIds.includes(r.tenantId)) return false;
   if (s.merchantIds !== "*" && !s.merchantIds.includes(r.merchantId)) return false;
   return true;
 }

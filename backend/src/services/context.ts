@@ -2,7 +2,6 @@ import type { Principal } from "../authorization/principal.js";
 import type { ConsoleDataSource } from "../database/dataSource.js";
 import type { MembershipDirectory } from "../integrations/directory.js";
 import type { ScreenStore } from "../screens/store.js";
-import type { AccessStore } from "./access.js";
 import type { ExceptionalAccessStore } from "./exceptional.js";
 import type { AuditLog } from "./audit.js";
 
@@ -10,9 +9,8 @@ import type { AuditLog } from "./audit.js";
 export interface Services {
   data: ConsoleDataSource;
   audit: AuditLog;
+  /** Who holds which role: merchant.memberships through the Go gateway (Q39). */
   directory: MembershipDirectory;
-  /** Role grants (02-02 WF-002). Also the default membership directory. */
-  access: AccessStore;
   /** Exceptional access grants (ADR 0004). */
   exceptional: ExceptionalAccessStore;
   screens: ScreenStore;

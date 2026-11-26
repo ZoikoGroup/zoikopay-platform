@@ -1,6 +1,9 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { FIXTURE_IDS } from "../src/database/fixtures.js";
 import { makeTestApp, ORIGIN, PASSWORD } from "./helpers.js";
+
+const M = FIXTURE_IDS.merchants;
 
 type Row = { id: string; status: string; version: number; isOwnRequest: boolean; merchantId?: string; actions: { name: string; allowed: boolean; blockedReason?: string }[] };
 
@@ -33,8 +36,8 @@ describe("console screens (Business Requirements §07)", () => {
     const t = setup();
     const res = await t.list(t.loginAs("merchant.ops"), "ZP-BRW-008");
     expect(res.status).toBe(200);
-    expect(new Set(res.body.data.items.map((r: Row) => r.merchantId))).toEqual(new Set(["mer_northwind_uk"]));
-    const foreign = t.services.screens.rawRows("ZP-BRW-008").find((r) => r.merchantId === "mer_alder_books")!;
+    expect(new Set(res.body.data.items.map((r: Row) => r.merchantId))).toEqual(new Set([M.northwindUk]));
+    const foreign = t.services.screens.rawRows("ZP-BRW-008").find((r) => r.merchantId === M.alderBooks)!;
     expect((await request(t.app).get(`/api/v1/screens/ZP-BRW-008/records/${foreign.id}`).set("Cookie", t.loginAs("merchant.ops"))).status).toBe(404);
   });
 
@@ -109,7 +112,7 @@ describe("console screens (Business Requirements §07)", () => {
 });
 
 describe("sandbox payment intent (ZP-BRW-004, 04-08 idempotency)", () => {
-  const body = { merchantId: "mer_northwind_uk", amount_minor: "1999", currency: "GBP", capture_mode: "automatic", order_ref: "ORD-1" };
+  const body = { merchantId: M.northwindUk, amount_minor: "1999", currency: "GBP", capture_mode: "automatic", order_ref: "ORD-1" };
   const post = (t: ReturnType<typeof setup>, cookie: string, b: object, key?: string) => {
     const r = request(t.app).post("/api/v1/sandbox/payment-intents").set("Cookie", cookie).set("Origin", ORIGIN);
     return (key ? r.set("Idempotency-Key", key) : r).send(b);
@@ -139,7 +142,7 @@ describe("sandbox payment intent (ZP-BRW-004, 04-08 idempotency)", () => {
 
   it("is only for merchants in scope", async () => {
     const t = setup();
-    const res = await post(t, t.loginAs("merchant.ops"), { ...body, merchantId: "mer_alder_books" }, "key-00000003");
+    const res = await post(t, t.loginAs("merchant.ops"), { ...body, merchantId: M.alderBooks }, "key-00000003");
     expect(res.status).toBe(404);
   });
 });

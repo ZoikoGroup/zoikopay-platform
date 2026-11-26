@@ -8,6 +8,17 @@ export interface IdentityClaims {
   displayName: string;
   authTime: number;
   refreshToken?: string;
+  /** Kept server-side only; the console calls the Go gateway with it (Q39). Never logged. */
+  accessToken?: string;
+  /** Epoch ms. */
+  accessTokenExpiresAt?: number;
+}
+
+/** A renewed access token, and the rotated refresh token when the provider issues one. */
+export interface TokenSet {
+  accessToken: string;
+  accessTokenExpiresAt: number;
+  refreshToken?: string;
 }
 
 export interface AuthorizationRequest {
@@ -28,6 +39,11 @@ export interface IdentityProvider {
   authorizationRequest?(redirectUri: string, providerAlias?: string): Promise<AuthorizationRequest>;
   authorizationCallback?(url: URL, transaction: AuthorizationTransaction): Promise<IdentityClaims>;
   passwordLogin(username: string, password: string): Promise<IdentityClaims>;
+  /**
+   * Renews the access token with the refresh token. Throws AppError 401
+   * SESSION_EXPIRED when the provider no longer accepts it, 503 when it cannot be reached.
+   */
+  refresh(refreshToken: string): Promise<TokenSet>;
   /** Ends the identity-provider session. Best effort. */
   logout(refreshToken: string | undefined): Promise<void>;
 }
@@ -83,7 +99,26 @@ export class KeycloakProvider implements IdentityProvider {
       displayName: typeof claims.name === "string" && claims.name ? claims.name : name,
       authTime: typeof claims.auth_time === "number" ? claims.auth_time : Math.floor(Date.now() / 1000),
       refreshToken: tokens.refresh_token,
+      ...accessTokenOf(tokens),
     };
+  }
+
+  async refresh(refreshToken: string): Promise<TokenSet> {
+    const config = await this.configuration();
+    let tokens;
+    try {
+      tokens = await client.refreshTokenGrant(config, refreshToken);
+    } catch (err) {
+      if ((err as { error?: string }).error === "invalid_grant") {
+        throw new AppError(401, "SESSION_EXPIRED", "Your session has expired", "Sign in again to continue.");
+      }
+      throw new AppError(503, "IDENTITY_PROVIDER_UNAVAILABLE", "Sign-in is temporarily unavailable", "The identity provider could not renew the session.");
+    }
+    const at = accessTokenOf(tokens);
+    if (!at.accessToken || at.accessTokenExpiresAt === undefined) {
+      throw new AppError(503, "IDENTITY_PROVIDER_UNAVAILABLE", "Sign-in is temporarily unavailable", "No access token was returned.");
+    }
+    return { accessToken: at.accessToken, accessTokenExpiresAt: at.accessTokenExpiresAt, refreshToken: tokens.refresh_token ?? refreshToken };
   }
 
   async authorizationRequest(redirectUri: string, providerAlias?: string): Promise<AuthorizationRequest> {
@@ -109,7 +144,8 @@ export class KeycloakProvider implements IdentityProvider {
       if (!claims?.sub) throw new Error('Missing subject');
       const username = typeof claims.preferred_username === 'string' ? claims.preferred_username : claims.sub;
       return { sub: claims.sub, username, displayName: typeof claims.name === 'string' && claims.name ? claims.name : username,
-        authTime: typeof claims.auth_time === 'number' ? claims.auth_time : Math.floor(Date.now() / 1000), refreshToken: tokens.refresh_token };
+        authTime: typeof claims.auth_time === 'number' ? claims.auth_time : Math.floor(Date.now() / 1000), refreshToken: tokens.refresh_token,
+        ...accessTokenOf(tokens) };
     } catch {
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Sign-in could not be verified');
     }
@@ -123,4 +159,10 @@ export class KeycloakProvider implements IdentityProvider {
       // Best effort: the console session is destroyed regardless.
     }
   }
+}
+
+/** The access token and its expiry. Without expires_in it counts as expired, so the next request renews it. */
+function accessTokenOf(tokens: { access_token?: string; expires_in?: number }): Pick<IdentityClaims, "accessToken" | "accessTokenExpiresAt"> {
+  if (!tokens.access_token) return {};
+  return { accessToken: tokens.access_token, accessTokenExpiresAt: Date.now() + (tokens.expires_in ?? 0) * 1000 };
 }

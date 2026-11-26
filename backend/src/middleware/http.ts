@@ -42,6 +42,7 @@ export function errorHandler(log: Logger) {
     let e: AppError;
     if (err instanceof AppError) {
       e = err;
+      if (e.internalReason) log.warn({ requestId: req.requestId, code: e.code, reason: e.internalReason }, "request refused");
     } else if (err instanceof SyntaxError && "body" in err) {
       e = new AppError(400, "VALIDATION_FAILED", "Malformed JSON body");
     } else if ((err as { type?: string }).type === "entity.too.large") {

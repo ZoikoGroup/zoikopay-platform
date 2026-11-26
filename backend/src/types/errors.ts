@@ -23,6 +23,8 @@ export type ErrorCode =
   | "ORIGIN_REJECTED"
   | "RATE_LIMITED"
   | "IDENTITY_PROVIDER_UNAVAILABLE"
+  | "MEMBERSHIP_UNAVAILABLE"
+  | "GRANT_ADMINISTRATION_UNAVAILABLE"
   | "INTERNAL";
 
 export class AppError extends Error {
@@ -32,6 +34,8 @@ export class AppError extends Error {
     readonly title: string,
     readonly detail?: string,
     readonly fields?: { path: string; message: string }[],
+    /** For the server log only, never the response. A fixed phrase: never a token or a request value. */
+    readonly internalReason?: string,
   ) {
     super(detail ?? title);
   }

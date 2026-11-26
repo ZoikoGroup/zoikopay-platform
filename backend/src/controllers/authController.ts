@@ -23,7 +23,7 @@ export function authController(s: Services, idp: IdentityProvider, accounts: Acc
         throw err;
       }
 
-      await establishLogin(req, claims, s);
+      await establishLogin(req, claims, s, idp);
       res.json({ data: { username: claims.username }, meta: { requestId: req.requestId, source: "console" } });
     },
 

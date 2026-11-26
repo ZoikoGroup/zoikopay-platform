@@ -1,6 +1,10 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { FIXTURE_IDS } from "../src/database/fixtures.js";
 import { makeTestApp, ORIGIN } from "./helpers.js";
+
+const T = FIXTURE_IDS.tenants;
+const M = FIXTURE_IDS.merchants;
 
 /** 03-05 §10.1: Super Admin is a coordination role. Health, counts and redacted tenant metadata only. */
 describe("Super Admin platform page", () => {
@@ -19,7 +23,7 @@ describe("Super Admin platform page", () => {
     const res = await request(t.app).get("/api/v1/platform/summary").set("Cookie", t.loginAs("super.admin"));
     const d = res.body.data;
     expect(d.totals.merchants).toBeGreaterThan(0);
-    expect(d.organisations.map((o: { id: string }) => o.id)).toEqual(["ten_alder", "ten_kestrel", "ten_northwind"]);
+    expect(d.organisations.map((o: { id: string }) => o.id)).toEqual([T.alder, T.kestrel, T.northwind].sort());
     expect(d.roles.find((r: { persona: string }) => r.persona === "PFIN").count).toBe(2);
 
     const body = JSON.stringify(d);
@@ -53,7 +57,7 @@ describe("Super Admin platform page", () => {
     // Per-merchant drill-down (fraud rate, settlement, pending payouts) is merchant operating data.
     for (const path of [
       "/api/v1/overview/kpis?period=7d&currency=GBP",
-      "/api/v1/overview/kpis?period=7d&currency=GBP&merchantId=mer_northwind_uk",
+      `/api/v1/overview/kpis?period=7d&currency=GBP&merchantId=${M.northwindUk}`,
       "/api/v1/overview/activity?period=7d&currency=GBP",
       "/api/v1/overview/recent-activity",
       "/api/v1/scope",

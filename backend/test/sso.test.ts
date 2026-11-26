@@ -48,7 +48,7 @@ describe('authorization-code SSO', () => {
     for (const value of ['private-authorization-code', 'private-state', 'private-referrer']) expect(output).not.toContain(value);
   });
   it('requires explicit SSO activation in production and accepts only broker aliases', () => {
-    const env = { NODE_ENV: 'production', OIDC_ISSUER: 'https://idp.test/realms/zoikopay', OIDC_CLIENT_ID: 'console', OIDC_CLIENT_SECRET: 'test-secret', SESSION_SECRET: 'a-valid-testing-secret-of-at-least-32-characters', ACCOUNT_ADMIN_CLIENT_SECRET: 'rotated-test-only-secret' };
+    const env = { NODE_ENV: 'production', OIDC_ISSUER: 'https://idp.test/realms/zoikopay', OIDC_CLIENT_ID: 'console', OIDC_CLIENT_SECRET: 'test-secret', SESSION_SECRET: 'a-valid-testing-secret-of-at-least-32-characters', ACCOUNT_ADMIN_CLIENT_SECRET: 'rotated-test-only-secret', GATEWAY_URL: 'https://gateway.test' };
     expect(loadConfig(env).sso?.enabled).toBe(false);
     expect(loadConfig({ ...env, OIDC_SSO_ENABLED: 'true', OIDC_SSO_GOOGLE_ALIAS: 'approved-google' }).sso?.aliases.google).toBe('approved-google');
     expect(() => loadConfig({ ...env, OIDC_SSO_GOOGLE_ALIAS: 'https://evil.test' })).toThrow();

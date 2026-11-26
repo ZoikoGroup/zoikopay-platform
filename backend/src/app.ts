@@ -7,8 +7,7 @@ import type { Config } from "./config.js";
 import { FixtureDataSource, type ConsoleDataSource } from "./database/dataSource.js";
 import { generateFixtures } from "./database/fixtures.js";
 import { ScreenStore } from "./screens/store.js";
-import { DEV_MEMBERSHIPS, type MembershipDirectory } from "./integrations/directory.js";
-import { AccessStore } from "./services/access.js";
+import { GatewayDirectory, type MembershipDirectory } from "./integrations/directory.js";
 import { ExceptionalAccessStore } from "./services/exceptional.js";
 import { KeycloakAccountAdmin, type AccountAdmin } from "./integrations/accounts.js";
 import type { IdentityProvider } from "./integrations/oidc.js";
@@ -37,16 +36,15 @@ export function createApp(deps: AppDeps): { app: Express; services: Services; he
   const { config, log } = deps;
   const now = deps.now ?? Date.now;
   const startedAt = now();
-  // Roles are grants managed on the Access screen, seeded with the local users.
-  const access = new AccessStore(DEV_MEMBERSHIPS, now);
   const accounts = deps.accounts ?? new KeycloakAccountAdmin(config);
+  const data = deps.data ?? new FixtureDataSource(startedAt);
   const services: Services = {
-    data: deps.data ?? new FixtureDataSource(startedAt),
+    data,
     // Same seed and start time as the data source, so screens and dashboard agree.
     screens: new ScreenStore(generateFixtures(startedAt), startedAt),
     audit: new AuditLog(() => new Date(now())),
-    directory: deps.directory ?? access,
-    access,
+    // Roles come only from merchant.memberships through the Go gateway (Q39).
+    directory: deps.directory ?? new GatewayDirectory({ baseUrl: config.gatewayUrl, issuer: config.oidc.issuer, idp: deps.idp, data, now }),
     exceptional: new ExceptionalAccessStore(now),
     now,
   };
@@ -89,7 +87,7 @@ export function createApp(deps: AppDeps): { app: Express; services: Services; he
   app.use(originCheck(config.publicOrigin));
 
   app.use("/auth", authRoutes(services, deps.idp, accounts, config));
-  app.use("/api/v1", apiRoutes(services, health, accounts));
+  app.use("/api/v1", apiRoutes(services, health));
   app.use(notFoundRoute);
   app.use(errorHandler(log));
 

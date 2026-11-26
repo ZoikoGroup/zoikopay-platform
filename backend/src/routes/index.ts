@@ -39,9 +39,9 @@ export function authRoutes(s: Services, idp: IdentityProvider, accounts: Account
  * route declares the permission it needs. Services then apply object-level
  * scope checks; the route guard alone is never the whole decision.
  */
-export function apiRoutes(s: Services, health: HealthMonitor, accounts: AccountAdmin): Router {
+export function apiRoutes(s: Services, health: HealthMonitor): Router {
   const r = Router();
-  const c = apiController(s, health, new NotificationService(), new SandboxService(), accounts);
+  const c = apiController(s, health, new NotificationService(), new SandboxService());
   const can = (...p: Parameters<typeof requireAny>[1][]) => requireAny(s, ...p);
 
   r.use(rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: "draft-8", legacyHeaders: false,
@@ -76,7 +76,8 @@ export function apiRoutes(s: Services, health: HealthMonitor, accounts: AccountA
   r.post("/notifications/:id/read", c.markNotificationRead);
   r.get("/audit", can("area.audits"), c.audit);
 
-  // Access: role and delegation administration (02-02 ZP-PER-WF-002).
+  // Access: role and delegation administration (02-02 ZP-PER-WF-002). Refused
+  // after the area check until Go has grant administration (Q39).
   r.get("/access/members", can("area.access"), c.accessMembers);
   r.get("/access/members/:sub", can("area.access"), c.accessMember);
   r.get("/access/options", can("area.access"), c.accessOptions);

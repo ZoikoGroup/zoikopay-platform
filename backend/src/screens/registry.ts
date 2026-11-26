@@ -9,8 +9,7 @@
  * moves money or calls a provider; decisions only change these mock records
  * and are audited.
  */
-import { LEGAL_ENTITIES, MERCHANTS } from "../database/fixtures.js";
-import { devUserId } from "../integrations/directory.js";
+import { LEGAL_ENTITIES, localUserId as devUserId, MERCHANTS } from "../database/fixtures.js";
 import type { Merchant } from "../types/domain.js";
 import type { Money, ScreenDef, ScreenRecord } from "./types.js";
 

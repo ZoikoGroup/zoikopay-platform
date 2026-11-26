@@ -3,8 +3,7 @@ import { parse } from "../middleware/http.js";
 import { auditActor, type Services } from "../services/context.js";
 import type { HealthMonitor } from "../services/health.js";
 import type { SandboxService } from "../services/sandbox.js";
-import type { AccountAdmin } from "../integrations/accounts.js";
-import { accessAction, accessActionBody, accessQuery, accessRequestBody, grantId, personSub } from "../validators/access.js";
+import { grantAdministrationUnavailable } from "../services/access.js";
 import { listAudit, search, type NotificationService } from "../services/shell.js";
 import { activitySeries, overviewKpis, recentActivity } from "../services/overview.js";
 import { getPayment, listPayments } from "../services/payments.js";
@@ -18,7 +17,7 @@ import { actionBody, actionName, auditQuery, recordId, sandboxBody, screenId, sc
 import { environmentBody, overviewQuery } from "../validators/session.js";
 import { ctxOf, ok } from "./respond.js";
 
-export function apiController(s: Services, health: HealthMonitor, notifications: NotificationService, sandbox: SandboxService, accounts: AccountAdmin) {
+export function apiController(s: Services, health: HealthMonitor, notifications: NotificationService, sandbox: SandboxService) {
   const asOf = () => s.data.asOf();
   return {
     me: (req: Request, res: Response) => ok(req, res, me(s, ctxOf(req)), "console"),
@@ -68,15 +67,9 @@ export function apiController(s: Services, health: HealthMonitor, notifications:
     },
     audit: (req: Request, res: Response) => ok(req, res, listAudit(s, ctxOf(req), parse(auditQuery, req.query)), "console"),
 
-    accessMembers: async (req: Request, res: Response) =>
-      ok(req, res, await s.access.listMembers(s, ctxOf(req), accounts, parse(accessQuery, req.query)), "console"),
-    accessMember: async (req: Request, res: Response) => {
-      const sub = parse(personSub, req.params.sub);
-      // A person with no grant yet is known only to Zoiko iD; only IAM and Security may look them up.
-      const account = s.access.allGrants().some((g) => g.sub === sub) ? undefined
-        : (await accounts.listAccounts().catch(() => [])).find((a) => a.sub === sub);
-      ok(req, res, s.access.member(s, ctxOf(req), sub, account), "console");
-    },
+    // Access screen: refused until Go has grant administration (Q39).
+    accessMembers: (req: Request) => grantAdministrationUnavailable(s, ctxOf(req), "access.members"),
+    accessMember: (req: Request) => grantAdministrationUnavailable(s, ctxOf(req), "access.member"),
     xaList: (req: Request, res: Response) => ok(req, res, s.exceptional.list(s, ctxOf(req), parse(xaListQuery, req.query)), "console"),
     xaOptions: (req: Request, res: Response) => ok(req, res, s.exceptional.options(s, ctxOf(req)), "fixture", asOf()),
     xaRequest: (req: Request, res: Response) => ok(req, res, s.exceptional.request(s, ctxOf(req), parse(xaRequestBody, req.body)), "console", undefined, 201),
@@ -87,10 +80,8 @@ export function apiController(s: Services, health: HealthMonitor, notifications:
       ok(req, res, s.exceptional.payments(s, ctxOf(req), parse(xaId, req.params.id), parse(xaPaymentsQuery, req.query)), "fixture", asOf()),
     xaPayment: (req: Request, res: Response) =>
       ok(req, res, s.exceptional.payment(s, ctxOf(req), parse(xaId, req.params.id), parse(paymentIdSchema, req.params.paymentId)), "fixture", asOf()),
-    accessOptions: (req: Request, res: Response) => ok(req, res, s.access.requestOptions(s, ctxOf(req)), "fixture", asOf()),
-    accessRequest: async (req: Request, res: Response) =>
-      ok(req, res, await s.access.request(s, ctxOf(req), accounts, parse(accessRequestBody, req.body)), "console", undefined, 201),
-    accessAction: (req: Request, res: Response) =>
-      ok(req, res, s.access.act(s, ctxOf(req), parse(grantId, req.params.id), parse(accessAction, req.params.action), parse(accessActionBody, req.body)), "console"),
+    accessOptions: (req: Request) => grantAdministrationUnavailable(s, ctxOf(req), "access.options"),
+    accessRequest: (req: Request) => grantAdministrationUnavailable(s, ctxOf(req), "access.request"),
+    accessAction: (req: Request) => grantAdministrationUnavailable(s, ctxOf(req), "access.action"),
   };
 }

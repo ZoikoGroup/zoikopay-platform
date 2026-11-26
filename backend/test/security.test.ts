@@ -1,6 +1,9 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { FIXTURE_IDS } from "../src/database/fixtures.js";
 import { makeTestApp, ORIGIN } from "./helpers.js";
+
+const T = FIXTURE_IDS.tenants;
 
 describe("transport and request security", () => {
   const { app, loginAs } = makeTestApp();
@@ -23,7 +26,7 @@ describe("transport and request security", () => {
 
   it("ignores client-supplied identity, role and tenant headers", async () => {
     const res = await request(app).get("/api/v1/payments")
-      .set("X-User", "super.admin").set("X-Role", "PFIN").set("X-Tenant-Id", "ten_northwind").set("Authorization", "Bearer forged");
+      .set("X-User", "super.admin").set("X-Role", "PFIN").set("X-Tenant-Id", T.northwind).set("Authorization", "Bearer forged");
     expect(res.status).toBe(401);
   });
 

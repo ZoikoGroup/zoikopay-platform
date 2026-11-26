@@ -12,6 +12,8 @@ export interface Config {
   /** Service client for creating accounts and setting passwords. */
   accountAdmin: { clientId: string; clientSecret: string };
   goServices: { name: string; baseUrl: string }[];
+  /** Go gateway (D1) base URL. Roles come from its GET /v1/principal (OPEN_QUESTIONS Q39). */
+  gatewayUrl: string;
   dataSource: "fixtures";
 }
 
@@ -32,6 +34,7 @@ const schema = z.object({
   ACCOUNT_ADMIN_CLIENT_ID: z.string().min(1).default("zoikopay-console-admin"),
   ACCOUNT_ADMIN_CLIENT_SECRET: z.string().min(1).default("local-dev-only-account-admin-secret"),
   GO_SERVICES: z.string().default(""),
+  GATEWAY_URL: z.url().optional(),
   DATA_SOURCE: z.literal("fixtures").default("fixtures"),
 });
 
@@ -62,6 +65,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (production && (e.SESSION_SECRET.startsWith("local-dev-only") || e.ACCOUNT_ADMIN_CLIENT_SECRET.startsWith("local-dev-only"))) {
     throw new Error("SESSION_SECRET and ACCOUNT_ADMIN_CLIENT_SECRET must be replaced outside local development");
   }
+  // The console sends each user's access token to the gateway, so outside
+  // local development the URL must be given explicitly and be HTTPS.
+  const gatewayUrl = e.GATEWAY_URL ?? (production ? undefined : "http://localhost:8080");
+  if (!gatewayUrl || (production && new URL(gatewayUrl).protocol !== "https:")) {
+    throw new Error("GATEWAY_URL must be set to the gateway's https:// address outside local development");
+  }
   return {
     port: e.PORT,
     production,
@@ -77,6 +86,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     } },
     accountAdmin: { clientId: e.ACCOUNT_ADMIN_CLIENT_ID, clientSecret: e.ACCOUNT_ADMIN_CLIENT_SECRET },
     goServices: parseGoServices(e.GO_SERVICES),
+    gatewayUrl: gatewayUrl.replace(/\/$/, ""),
     dataSource: e.DATA_SOURCE,
   };
 }

@@ -1,13 +1,16 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { FIXTURE_IDS } from "../src/database/fixtures.js";
 import { makeTestApp, ORIGIN, PASSWORD } from "./helpers.js";
+
+const M = FIXTURE_IDS.merchants;
 
 /** ADR 0004 acceptance tests: exceptional access (03-05 §10.2; 02-02 WF-007, WF-011). */
 
 type Xa = { id: string; status: string; version: number; actions: { name: string; allowed: boolean }[]; expiresAt: string | null; reviewDue: boolean };
 type Agent = ReturnType<typeof request.agent>;
 
-const NORTHWIND_UK = "mer_northwind_uk";
+const NORTHWIND_UK = M.northwindUk;
 const support = { kind: "support", ticketId: "SUP-1042", purpose: "Customer says the refund never arrived", merchantIds: [NORTHWIND_UK], unmasked: [], durationMinutes: 60 };
 
 function setup(start = Date.parse("2026-11-13T10:00:00Z")) {
@@ -50,8 +53,8 @@ describe("ADR 0004 exceptional access", () => {
     const t = setup();
     const sup = await t.agent("support.agent");
     expect((await t.ask(sup, { ...support, ticketId: "" })).status).toBe(400);
-    expect((await t.ask(sup, { ...support, merchantIds: [NORTHWIND_UK, "mer_alder_books"] })).status).toBe(400); // two organisations
-    expect((await t.ask(sup, { ...support, merchantIds: [NORTHWIND_UK, "mer_northwind_eu"] })).status).toBe(400); // two cells
+    expect((await t.ask(sup, { ...support, merchantIds: [NORTHWIND_UK, M.alderBooks] })).status).toBe(400); // two organisations
+    expect((await t.ask(sup, { ...support, merchantIds: [NORTHWIND_UK, M.northwindEu] })).status).toBe(400); // two cells
     expect((await t.ask(sup, { ...support, durationMinutes: 241 })).status).toBe(400);
     expect((await t.ask(sup, { ...support, kind: "breakglass", ticketId: "INC-7", durationMinutes: 180 })).status).toBe(403); // Support cannot break glass
     const sre = await t.agent("sre.oncall");
@@ -126,8 +129,7 @@ describe("ADR 0004 exceptional access", () => {
 
     const t2 = setup();
     const second = await t2.active();
-    const grant = t2.services.access.allGrants().find((x) => x.username === "support.agent" && x.status === "ACTIVE")!;
-    grant.status = "REVOKED"; // as if IAM revoked the Support role
+    t2.directory.revoke("support.agent"); // as if the Support role were revoked
     expect((await t2.payments(second.sup, second.g)).status).toBe(403);
     expect((await second.sec.get(`/api/v1/exceptional-access/${second.g.id}`)).body.data.status).toBe("CLOSED");
   });

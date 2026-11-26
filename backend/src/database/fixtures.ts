@@ -2,13 +2,50 @@ import type {
   ActivityEvent, AttemptStatus, EvidenceEvent, IntentStatus, LegalEntity, Merchant, Payment, Payout,
   SettlementBatch,
 } from "../types/domain.js";
-import { devUserId } from "../integrations/directory.js";
-
 /**
  * DEVELOPMENT FIXTURES. Deterministic, fictional data for the TEST environment
  * only. They stand in for Go business APIs that do not exist yet and are always
  * labelled `source: "fixture"` in API responses. Nothing here is production data.
  */
+
+/**
+ * Keycloak user ID of a local realm user (deploy/compose/keycloak/zoikopay-realm.json
+ * fixes them). Used only to name the fictional people who made fixture
+ * records; it grants nothing. Roles come from merchant.memberships (Q39).
+ */
+export const localUserId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+/**
+ * Fixed synthetic tenant and merchant IDs in the real `ten_`/`mer_` UUIDv7
+ * format (merchant.tenants / merchant.merchants CHECKs), so the grants that
+ * `make seed-local` writes to merchant.memberships cover these fixture
+ * records (OPEN_QUESTIONS Q39). scripts/seed-local.sql must use the same IDs;
+ * test/seed.test.ts checks that.
+ */
+export const FIXTURE_IDS = {
+  tenants: {
+    northwind: "ten_019a0000000170008000000000000001",
+    alder: "ten_019a0000000270008000000000000002",
+    kestrel: "ten_019a0000000370008000000000000003",
+  },
+  merchants: {
+    northwindUk: "mer_019a0000010170008000000000000101",
+    northwindEu: "mer_019a0000010270008000000000000102",
+    alderBooks: "mer_019a0000020170008000000000000201",
+    alderTravel: "mer_019a0000020270008000000000000202",
+    kestrelUk: "mer_019a0000030170008000000000000301",
+    kestrelEu: "mer_019a0000030270008000000000000302",
+  },
+} as const;
+const T = FIXTURE_IDS.tenants;
+const M = FIXTURE_IDS.merchants;
+
+/** Fixture tenants (organisations): ID and display name only. */
+export const TENANTS: { id: string; name: string }[] = [
+  { id: T.northwind, name: "Northwind" },
+  { id: T.alder, name: "Alder" },
+  { id: T.kestrel, name: "Kestrel" },
+];
 
 // Small seeded PRNG so every run produces the same dataset.
 function mulberry32(seed: number) {
@@ -28,12 +65,12 @@ export const LEGAL_ENTITIES: LegalEntity[] = [
 ];
 
 export const MERCHANTS: Merchant[] = [
-  { id: "mer_northwind_uk", tenantId: "ten_northwind", legalEntityId: "cell_uk_01", displayName: "Northwind Outfitters UK", currencies: ["GBP"], environment: "TEST" },
-  { id: "mer_northwind_eu", tenantId: "ten_northwind", legalEntityId: "cell_eu_01", displayName: "Northwind Outfitters EU", currencies: ["EUR"], environment: "TEST" },
-  { id: "mer_alder_books", tenantId: "ten_alder", legalEntityId: "cell_uk_01", displayName: "Alder Books", currencies: ["GBP", "USD"], environment: "TEST" },
-  { id: "mer_alder_travel", tenantId: "ten_alder", legalEntityId: "cell_eu_01", displayName: "Alder Travel", currencies: ["EUR", "USD"], environment: "TEST" },
-  { id: "mer_kestrel_uk", tenantId: "ten_kestrel", legalEntityId: "cell_uk_01", displayName: "Kestrel Studio UK", currencies: ["GBP"], environment: "TEST" },
-  { id: "mer_kestrel_eu", tenantId: "ten_kestrel", legalEntityId: "cell_eu_01", displayName: "Kestrel Studio EU", currencies: ["EUR"], environment: "TEST" },
+  { id: M.northwindUk, tenantId: T.northwind, legalEntityId: "cell_uk_01", displayName: "Northwind Outfitters UK", currencies: ["GBP"], environment: "TEST" },
+  { id: M.northwindEu, tenantId: T.northwind, legalEntityId: "cell_eu_01", displayName: "Northwind Outfitters EU", currencies: ["EUR"], environment: "TEST" },
+  { id: M.alderBooks, tenantId: T.alder, legalEntityId: "cell_uk_01", displayName: "Alder Books", currencies: ["GBP", "USD"], environment: "TEST" },
+  { id: M.alderTravel, tenantId: T.alder, legalEntityId: "cell_eu_01", displayName: "Alder Travel", currencies: ["EUR", "USD"], environment: "TEST" },
+  { id: M.kestrelUk, tenantId: T.kestrel, legalEntityId: "cell_uk_01", displayName: "Kestrel Studio UK", currencies: ["GBP"], environment: "TEST" },
+  { id: M.kestrelEu, tenantId: T.kestrel, legalEntityId: "cell_eu_01", displayName: "Kestrel Studio EU", currencies: ["EUR"], environment: "TEST" },
 ];
 
 const STATUS_WEIGHTS: [IntentStatus, number][] = [
@@ -154,8 +191,8 @@ export function generateFixtures(now = Date.now(), seed = 20261110): FixtureData
   payments.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const makers = [
-    { sub: devUserId(3), name: "Jordan Pike" }, // fin.controller.a (PFIN)
-    { sub: devUserId(4), name: "Sam Okafor" }, // fin.controller.b (PFIN)
+    { sub: localUserId(3), name: "Jordan Pike" }, // fin.controller.a (PFIN)
+    { sub: localUserId(4), name: "Sam Okafor" }, // fin.controller.b (PFIN)
   ];
   const payouts: Payout[] = [];
   for (let i = 0; i < 26; i++) {

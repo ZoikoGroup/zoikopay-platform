@@ -1,5 +1,6 @@
 import { PERSONA_LABELS, type Persona } from "../authorization/permissions.js";
 import { hasPermission } from "../authorization/policy.js";
+import { TENANTS } from "../database/fixtures.js";
 import { errors } from "../types/errors.js";
 import { auditActor, type CallContext, type Services } from "./context.js";
 
@@ -18,10 +19,9 @@ import { auditActor, type CallContext, type Services } from "./context.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Display name for a tenant id, e.g. ten_northwind → Northwind. Fixture tenants carry no name of their own. */
+/** Display name of a fixture tenant; unknown tenants show their ID only. */
 function tenantName(id: string): string {
-  const s = id.replace(/^ten_/, "").replaceAll("_", " ");
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return TENANTS.find((t) => t.id === id)?.name ?? id;
 }
 
 export function platformSummary(s: Services, ctx: CallContext) {
