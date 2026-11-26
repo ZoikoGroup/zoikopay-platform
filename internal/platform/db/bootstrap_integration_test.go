@@ -14,7 +14,7 @@ import (
 	"github.com/zoiko/zoikopay/internal/platform/health"
 )
 
-var runtimeRoles = []string{"zp_gateway", "zp_execution", "zp_finance", "zp_governance", "zp_relay"}
+var runtimeRoles = []string{"zp_gateway", "zp_execution", "zp_finance", "zp_governance", "zp_relay", "zp_audit"}
 
 // TestBootstrapRoleModel proves the preconditions rule 8 depends on: runtime
 // roles cannot bypass RLS, are not superusers and cannot run DDL.

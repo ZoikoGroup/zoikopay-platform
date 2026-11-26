@@ -71,7 +71,12 @@ type env struct {
 	reached atomic.Int32
 	seen    authz.Principal
 	seenID  string
+	v       *authn.Verifier
+	r       *authz.Resolver
 }
+
+// parts returns the real verifier and resolver behind the gateway.
+func (e *env) parts() (*authn.Verifier, *authz.Resolver) { return e.v, e.r }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
@@ -105,6 +110,7 @@ func newEnv(t *testing.T) *env {
 		e.seenID = trace.ID(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
+	e.v, e.r = v, r
 	e.handler = trace.Middleware(log, httpauth.Authenticate(v, r, log)(inner))
 	return e
 }

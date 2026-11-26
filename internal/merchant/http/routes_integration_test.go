@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/zoiko/zoikopay/internal/governance"
 	merchanthttp "github.com/zoiko/zoikopay/internal/merchant/http"
 	"github.com/zoiko/zoikopay/internal/merchant/store"
 	"github.com/zoiko/zoikopay/internal/platform/authn"
@@ -56,6 +57,8 @@ type gateway struct {
 	key     *rsa.PrivateKey
 	gw      *pgxpool.Pool
 	logs    *bytes.Buffer
+	audit   *governance.AuditLog // as zp_audit, like the gateway binary
+	su      *pgxpool.Pool        // superuser: sees every entry, for assertions only
 }
 
 func (g *gateway) token(sub string, edit ...func(map[string]any)) string {
@@ -161,8 +164,10 @@ func setup(t *testing.T) *gateway {
 	logs := &bytes.Buffer{}
 	log := slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	srv := httpserver.New(httpserver.Config{Name: "gateway"}, log)
-	merchanthttp.Mount(srv.Mux(), merchanthttp.Deps{Pool: gw, Verifier: verifier, Resolver: resolver, Log: log})
-	return &gateway{t: t, handler: srv.Handler(), key: key, gw: gw, logs: logs}
+	auditStore := governance.NewAuditLog(pg.Pool(t, "zp_audit"))
+	merchanthttp.Mount(srv.Mux(), merchanthttp.Deps{Pool: gw, Verifier: verifier, Resolver: resolver, Log: log,
+		Audit: auditStore, Environment: "TEST"})
+	return &gateway{t: t, handler: srv.Handler(), key: key, gw: gw, logs: logs, audit: auditStore, su: pg.Pool(t, "postgres")}
 }
 
 type problem struct {

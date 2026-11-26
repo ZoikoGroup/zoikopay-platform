@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/zoiko/zoikopay/internal/platform/apierror"
+	"github.com/zoiko/zoikopay/internal/platform/audit"
 	"github.com/zoiko/zoikopay/internal/platform/authn"
 	"github.com/zoiko/zoikopay/internal/platform/authz"
 	"github.com/zoiko/zoikopay/internal/platform/trace"
@@ -66,6 +67,7 @@ func Authenticate(v TokenVerifier, res PrincipalResolver, log *slog.Logger) func
 			switch {
 			case errors.Is(err, authn.ErrKeysUnavailable):
 				log.WarnContext(ctx, "token verification unavailable", "trace_id", trace.ID(ctx), "error", err)
+				audit.Describe(ctx, actionAuthenticate, "", "", "")
 				WriteProblem(w, r, apierror.New(apierror.TemporarilyUnavailable, detailUnavailable))
 				return
 			case err != nil:
@@ -73,15 +75,19 @@ func Authenticate(v TokenVerifier, res PrincipalResolver, log *slog.Logger) func
 				unauthenticated(w, r, log, err.Error())
 				return
 			}
+			// Only now is there an identity worth recording (Q38 38.9).
+			audit.SetActor(ctx, id.Issuer, id.Subject)
 
 			p, err := res.Resolve(ctx, id)
 			switch {
 			case errors.Is(err, authz.ErrAmbiguousPrincipal):
 				log.WarnContext(ctx, "principal refused", "trace_id", trace.ID(ctx), "reason", "grants in more than one environment")
+				audit.Describe(ctx, actionAuthenticate, "", "", "")
 				WriteProblem(w, r, apierror.New(apierror.PermissionDenied, detailAmbiguous))
 				return
 			case err != nil:
 				log.ErrorContext(ctx, "principal resolution unavailable", "trace_id", trace.ID(ctx), "error", err)
+				audit.Describe(ctx, actionAuthenticate, "", "", "")
 				WriteProblem(w, r, apierror.New(apierror.TemporarilyUnavailable, detailUnavailable))
 				return
 			}
@@ -90,16 +96,22 @@ func Authenticate(v TokenVerifier, res PrincipalResolver, log *slog.Logger) func
 	}
 }
 
+// actionAuthenticate is the audit action of a request refused before routing.
+const actionAuthenticate = "authenticate"
+
 func unauthenticated(w http.ResponseWriter, r *http.Request, log *slog.Logger, reason string) {
 	log.InfoContext(r.Context(), "request not authenticated", "trace_id", trace.ID(r.Context()), "reason", reason)
+	audit.Describe(r.Context(), actionAuthenticate, "", "", "") // no actor: the token proved nothing (Q38 38.9)
 	w.Header().Set("WWW-Authenticate", `Bearer realm="zoikopay"`)
 	WriteProblem(w, r, apierror.New(apierror.AuthenticationRequired, detailUnauthenticated))
 }
 
 // WriteProblem writes p as an RFC 9457 problem carrying the request's trace
-// ID as trace_id and request_id (Q37 37.1, 37.2).
+// ID as trace_id and request_id (Q37 37.1, 37.2), and gives its code to the
+// request's audit entry as the reason (Q38 38.13).
 func WriteProblem(w http.ResponseWriter, r *http.Request, p *apierror.Problem) {
 	id := trace.ID(r.Context())
 	p.TraceID = id
+	audit.SetReason(r.Context(), string(p.Code))
 	apierror.Write(w, id, p)
 }

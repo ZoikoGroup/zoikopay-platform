@@ -74,7 +74,9 @@ func (m Merchants) Get(ctx context.Context, p authz.Principal, merchantID string
 			continue // row-level security already limits rows to tenant; checked again
 		}
 		if !p.Can(authz.MerchantProfileRead, tenant, merchantID) {
-			return Merchant{}, ErrForbidden
+			// The merchant is in the caller's own tenant, so naming that tenant
+			// (for the audit entry) reveals nothing new (OPEN_QUESTIONS Q38 38.10).
+			return Merchant{TenantID: tenant}, ErrForbidden
 		}
 		return Merchant{
 			ID: row.MerchantID, TenantID: row.TenantID, Environment: row.Environment, DisplayName: row.DisplayName,

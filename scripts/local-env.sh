@@ -28,6 +28,10 @@ esac
 if [ -n "$role" ]; then
   export ZP_DATABASE_URL="postgres://${role}:${ZP_APP_PASSWORD:-local-dev-only-app}@localhost:${ZP_PG_PORT:-55432}/zoikopay?sslmode=disable"
 fi
+if [ "$svc" = gateway ]; then
+  # Audit log writer, a separate role from the gateway's (OPEN_QUESTIONS Q38).
+  export ZP_AUDIT_DATABASE_URL="postgres://zp_audit:${ZP_APP_PASSWORD:-local-dev-only-app}@localhost:${ZP_PG_PORT:-55432}/zoikopay?sslmode=disable"
+fi
 export ZP_TEMPORAL_ADDR="localhost:${ZP_TEMPORAL_PORT:-7233}"
 export ZP_TEMPORAL_NAMESPACE="zoikopay-execution"
 export ZP_OIDC_ISSUER="http://localhost:${ZP_KEYCLOAK_PORT:-8180}/realms/zoikopay"

@@ -11,6 +11,7 @@ import (
 	"github.com/zoiko/zoikopay/internal/apigen/publicapi"
 	"github.com/zoiko/zoikopay/internal/merchant/app"
 	"github.com/zoiko/zoikopay/internal/platform/apierror"
+	"github.com/zoiko/zoikopay/internal/platform/audit"
 	"github.com/zoiko/zoikopay/internal/platform/db"
 	"github.com/zoiko/zoikopay/internal/platform/httpauth"
 	"github.com/zoiko/zoikopay/internal/platform/trace"
@@ -18,10 +19,12 @@ import (
 
 // Deps are what the public merchant API needs.
 type Deps struct {
-	Pool     db.Beginner // zp_gateway
-	Verifier httpauth.TokenVerifier
-	Resolver httpauth.PrincipalResolver
-	Log      *slog.Logger
+	Pool        db.Beginner // zp_gateway
+	Verifier    httpauth.TokenVerifier
+	Resolver    httpauth.PrincipalResolver
+	Log         *slog.Logger
+	Audit       audit.Recorder // BC-08 audit log, as zp_audit (OPEN_QUESTIONS Q38)
+	Environment string         // the deployment's, TEST or LIVE
 }
 
 const detailNotFound = "The requested resource was not found."
@@ -29,6 +32,9 @@ const detailNotFound = "The requested resource was not found."
 // Mount serves the public API (api/openapi/public.v1.yaml) under /v1 on mux.
 // Authentication runs before routing, so an unauthenticated caller gets 401
 // for every /v1 path and cannot discover which routes exist (Q37 37.15).
+// Every /v1 request, allowed, denied or failed, leaves one audit entry; the
+// audit middleware sits outside authentication so it records 401s too, and
+// withholds the response if the entry cannot be written (Q38).
 func Mount(mux *stdhttp.ServeMux, d Deps) {
 	api := stdhttp.NewServeMux()
 	h := &Handler{merchants: app.Merchants{Pool: d.Pool}, log: d.Log}
@@ -40,9 +46,11 @@ func Mount(mux *stdhttp.ServeMux, d Deps) {
 		},
 	})
 	api.HandleFunc("/v1/", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		audit.Describe(r.Context(), "unknownRoute", "", "", "")
 		httpauth.WriteProblem(w, r, apierror.New(apierror.ResourceNotFound, detailNotFound))
 	})
-	mux.Handle("/v1/", httpauth.Authenticate(d.Verifier, d.Resolver, d.Log)(api))
+	authenticated := httpauth.Authenticate(d.Verifier, d.Resolver, d.Log)(api)
+	mux.Handle("/v1/", audit.Middleware(d.Audit, d.Environment, d.Log)(authenticated))
 }
 
 // Handler implements the public API's merchant operations.
@@ -62,6 +70,9 @@ func (h *Handler) GetMerchant(w stdhttp.ResponseWriter, r *stdhttp.Request, merc
 		return
 	}
 	m, err := h.merchants.Get(ctx, p, merchantID)
+	// The tenant is named only when the merchant was found in one of the
+	// caller's own tenants (200 or 403), never for a 404 (Q38 38.10).
+	audit.Describe(ctx, "getMerchant", "merchant", merchantID, m.TenantID)
 	switch {
 	case errors.Is(err, app.ErrNotFound):
 		httpauth.WriteProblem(w, r, apierror.New(apierror.ResourceNotFound, detailNotFound))

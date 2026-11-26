@@ -27,12 +27,16 @@ CREATE ROLE zp_execution  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS 
 CREATE ROLE zp_finance    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION NOINHERIT PASSWORD :'app_password';
 CREATE ROLE zp_governance LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION NOINHERIT PASSWORD :'app_password';
 CREATE ROLE zp_relay      LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION NOINHERIT PASSWORD :'app_password';
+-- Audit writer (OPEN_QUESTIONS Q38): INSERT and SELECT on governance.audit_events
+-- only, granted by that module's migration. Any deployable that records audit
+-- connects with it on a second pool, so no business role can touch the log.
+CREATE ROLE zp_audit      LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION NOINHERIT PASSWORD :'app_password';
 
 -- Lock down the database: nobody gets anything by default.
 REVOKE ALL ON DATABASE zoikopay FROM PUBLIC;
 GRANT CONNECT, CREATE ON DATABASE zoikopay TO zp_migrator;
 GRANT CONNECT ON DATABASE zoikopay TO zp_runtime;
-GRANT CONNECT ON DATABASE zoikopay TO zp_gateway, zp_execution, zp_finance, zp_governance, zp_relay;
+GRANT CONNECT ON DATABASE zoikopay TO zp_gateway, zp_execution, zp_finance, zp_governance, zp_relay, zp_audit;
 
 -- Nothing lives in public. Each module gets its own schema via migrations.
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
