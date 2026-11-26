@@ -30,10 +30,14 @@ make migrate       # applies db/migrations as zp_migrator
 make seed-local    # synthetic tenants, merchants and grants for the merchant users
 ```
 
-`make seed-local` gives grants only to the five merchant users. Platform staff
-(super.admin, ops.agent, iam.admin, …) get no grant, so they sign in with no
-access (OPEN_QUESTIONS Q39 39.3). Re-running it is safe; it also replaces
-expired or revoked seed grants.
+`make seed-local` gives grants only to the merchant users: two Northwind owners
+(`merchant.owner` and `merchant.owner.b`, so grant administration has an
+independent checker) and the merchant operations, finance, developer and viewer
+users. Platform staff (super.admin, ops.agent, iam.admin, …) get no grant, so
+they sign in with no access (OPEN_QUESTIONS Q39 39.3). It runs as the database
+superuser, which stands in for tenant provisioning: only provisioning may
+create owner grants (Q40 40.6). Re-running it is safe; it also replaces expired
+or revoked seed grants.
 
 ## 3. Run the gateway and the console
 
@@ -90,7 +94,8 @@ What it checks:
 | Bad tokens | Missing, empty, wrong scheme, garbage, `alg: none`, tampered payload, attacker-signed, algorithm confusion, embedded key, ID token, refresh token, wrong audience, other issuer and expired: all **401** with one identical body |
 | Tenant isolation | Another tenant's merchant, a sibling merchant without a grant, an unknown or malformed ID: identical **404**. Own merchant without the permission: **403** |
 | Forged authority | Forged headers and query values; real Keycloak-signed tokens carrying forged tenant, persona, realm-role and user-metadata claims: nothing changes |
-| Revocation | A grant revoked in Postgres is denied on the next request, for the same token and the same console session; a new grant restores access |
+| Revocation | A grant an owner revokes through the gateway is denied on the next request, for the same token and the same console session; a new grant restores access |
+| Grant administration | Invite, accept, request, approve, access works, revoke, denied, with a fresh synthetic user; maker ≠ checker ≠ member, never above the delegator, single-use invitations, stale versions, owner roles refused, a grant event for every change, and the database refusing a grant the runtime role writes directly (Q40) |
 | Audit | Every gateway request has exactly one entry in `governance.audit_events` with the right status and outcome; 401s have no actor, 404s no tenant; every console request is audited through the gateway |
 | Logs | No token in the gateway, console backend, frontend, Keycloak or Postgres logs, or in the audit table |
 

@@ -43,7 +43,7 @@ const M = {
   unknown: "mer_019a0000099970008000000000000999",
 };
 const sub = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const SUB = { superAdmin: sub(1), support: sub(6), owner: sub(10), ops: sub(11), viewer: sub(12), finance: sub(14), dev: sub(15) };
+const SUB = { superAdmin: sub(1), support: sub(6), owner: sub(10), ops: sub(11), viewer: sub(12), finance: sub(14), dev: sub(15), ownerB: sub(19) };
 
 // --- reporting ---------------------------------------------------------------
 let failures = 0;
@@ -112,16 +112,23 @@ const rs256 = (h, p) => { const d = `${b64u(h)}.${b64u(p)}`; return keep(`${d}.$
 // --- gateway -------------------------------------------------------------------
 /** Every direct gateway request, by trace ID, for the audit checks. */
 const gatewayCalls = [];
-async function gw(path, token, headers = {}) {
-  const res = await fetch(`${GATEWAY}${path}`, { headers: { ...(token !== undefined ? { authorization: token } : {}), ...headers }, signal: AbortSignal.timeout(10_000) });
+async function gw(path, token, headers = {}, { method = "GET", body } = {}) {
+  const res = await fetch(`${GATEWAY}${path}`, {
+    method, signal: AbortSignal.timeout(10_000), body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { ...(token !== undefined ? { authorization: token } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
+  });
   const text = await res.text();
-  let body = null;
-  try { body = JSON.parse(text); } catch { /* not JSON */ }
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch { /* not JSON */ }
   const trace = res.headers.get("x-trace-id");
   gatewayCalls.push({ path, status: res.status, trace });
-  return { status: res.status, body, trace, www: res.headers.get("www-authenticate") };
+  return { status: res.status, body: parsed, trace, www: res.headers.get("www-authenticate"), etag: res.headers.get("etag") };
 }
 const bearer = (t) => `Bearer ${t}`;
+/** A fresh Idempotency-Key: a quoted UUID (04-08, RFC 9651 string). */
+const idemKey = () => `"${crypto.randomUUID()}"`;
+/** POST to the gateway with a fresh Idempotency-Key unless headers carry one. */
+const gwPost = (path, token, body, headers = {}) => gw(path, token, { "idempotency-key": idemKey(), ...headers }, { method: "POST", body });
 /** A problem body without its per-request IDs, to compare responses for sameness. */
 const masked = (b) => JSON.stringify({ ...b, trace_id: undefined, request_id: undefined });
 
@@ -156,14 +163,14 @@ function psql(user, sql) {
     "psql", "-X", "-q", "-A", "-t", "-h", "localhost", "-U", user, "-d", "zoikopay", "-v", "ON_ERROR_STOP=1", "-f", "-"],
   { input: sql, encoding: "utf8" }).trim();
 }
-const asGateway = (sql) => psql("zp_gateway", sql); // BC-01's runtime role: RLS applies
-const asSuperuser = (sql) => psql("postgres", sql); // assertions only: reads every audit entry
-const reseed = () => asGateway(readFileSync(join(REPO, "scripts", "seed-local.sql"), "utf8"));
-const revokeAll = (subject) => asGateway(`BEGIN;
-SELECT set_config('zp.tenant_id', '${T.northwind}', true) \\g /dev/null
-UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = '${ISSUER}', revoked_by_subject = 'zp-e2e-revoker'
-WHERE issuer = '${ISSUER}' AND subject = '${subject}' AND revoked_at_utc IS NULL RETURNING persona;
-COMMIT;`);
+const asGateway = (sql) => psql("zp_gateway", sql); // BC-01's runtime role: RLS and the delegation rules apply
+const asSuperuser = (sql) => psql("postgres", sql); // the provisioning role (Q40) and assertions
+const reseed = () => asSuperuser(readFileSync(join(REPO, "scripts", "seed-local.sql"), "utf8"));
+/** The ID of member's live grant of persona in Northwind, as Northwind's owner lists it. */
+async function grantOf(ownerToken, member, persona) {
+  const list = await gw(`/v1/tenants/${T.northwind}/memberships`, ownerToken);
+  return list.body?.data?.find((m) => m.member?.subject === member && m.persona === persona)?.id;
+}
 
 // =============================================================================
 section("1. Valid login: roles come only from merchant.memberships");
@@ -377,7 +384,10 @@ await fin.login("merchant.finance");
 const finToken = bearer(t.finance.access_token);
 check("before: merchant.finance reads a Northwind merchant through the gateway", (await gw(`/v1/merchants/${M.northwindUk}`, finToken)).status === 200);
 check("before: merchant.finance sees Northwind payments in the console", (await fin.get("/api/v1/payments?pageSize=100")).status === 200);
-check("the MFIN grant is revoked in merchant.memberships", revokeAll(SUB.finance) === "MFIN");
+const ownerToken = bearer(t.owner.access_token);
+const finGrant = await grantOf(ownerToken, SUB.finance, "mfin");
+const revokedFin = await gwPost(`/v1/tenants/${T.northwind}/memberships/${finGrant}/revocation`, ownerToken, { reason: "end-to-end revocation check" });
+check("Northwind's owner revokes the MFIN grant through the gateway", revokedFin.status === 200 && !!revokedFin.body?.revoked_at, `HTTP ${revokedFin.status}`);
 check("gateway, same token, next request → 404", (await gw(`/v1/merchants/${M.northwindUk}`, finToken)).status === 404);
 check("gateway, same token: the principal lists no grant", (await gw("/v1/principal", finToken)).body?.grants?.length === 0);
 check("console, same session, next request: payments denied", (await fin.get("/api/v1/payments")).status === 403);
@@ -385,6 +395,91 @@ check("console, same session: no access left", (await fin.get("/api/v1/me")).bod
 reseed();
 check("a new grant restores access on the next request (gateway and console)",
   (await gw(`/v1/merchants/${M.northwindUk}`, finToken)).status === 200 && (await fin.get("/api/v1/payments")).status === 200);
+
+// =============================================================================
+section("5b. Grant administration: invite, accept, request, approve, access works, revoke, denied");
+// A fresh synthetic person, created in the local realm for this run only.
+const memberName = `e2e.member${Date.now().toString().slice(-6)}`;
+const memberPassword = "Member#Pass1"; // synthetic, local realm only
+await admin("POST", "/users", { username: memberName, enabled: true, email: `${memberName}@example.test`, emailVerified: true,
+  firstName: "E2E", lastName: "Member", credentials: [{ type: "password", value: memberPassword, temporary: false }] });
+const memberSub = (await admin("GET", `/users?username=${encodeURIComponent(memberName)}&exact=true`))?.[0]?.id;
+const memberToken = bearer(keep((await tokenRequest(ISSUER, { grant_type: "password", client_id: CONSOLE_CLIENT.id,
+  client_secret: CONSOLE_CLIENT.secret, username: memberName, password: memberPassword, scope: "openid profile" })).access_token));
+const ownerBToken = bearer((await userTokens("merchant.owner.b")).access_token);
+const tenantPath = `/v1/tenants/${T.northwind}`;
+
+const inviteKey = idemKey();
+const invite = await gwPost(`${tenantPath}/invitations`, ownerToken, undefined, { "idempotency-key": inviteKey });
+const invitationToken = keep(invite.body?.token);
+check("owner invites: 201, a pending inv_ with a one-time zpinv_ token", invite.status === 201 && invite.body?.status === "pending"
+  && /^inv_/.test(invite.body?.id ?? "") && /^zpinv_/.test(invitationToken ?? ""), `HTTP ${invite.status}`);
+const inviteReplay = await gwPost(`${tenantPath}/invitations`, ownerToken, undefined, { "idempotency-key": inviteKey });
+check("a retried invitation (same key) returns the same invitation without the token", inviteReplay.status === 200
+  && inviteReplay.body?.id === invite.body?.id && inviteReplay.body?.token === undefined);
+check("merchant.ops (not an owner) cannot invite → 403", (await gwPost(`${tenantPath}/invitations`, ops)).status === 403);
+check("another tenant's caller gets 404 for Northwind's invitations", (await gwPost(`${tenantPath}/invitations`, bearer(t.superAdmin.access_token))).status === 404);
+
+const accepted = await gwPost("/v1/invitations/accept", memberToken, { token: invitationToken });
+check("the invitee accepts with the token in the body", accepted.status === 200 && accepted.body?.accepted_by?.subject === memberSub, `HTTP ${accepted.status}`);
+check("the same token cannot be used again (replay) → 404", (await gwPost("/v1/invitations/accept", memberToken, { token: invitationToken })).status === 404);
+check("accepting grants nothing yet", (await gw("/v1/principal", memberToken)).body?.grants?.length === 0
+  && (await gw(`/v1/merchants/${M.northwindUk}`, memberToken)).status === 404);
+
+const window = (days) => ({ effective_from: new Date().toISOString(), expires_at: new Date(Date.now() + days * 86_400_000).toISOString() });
+const accessReq = await gwPost(`${tenantPath}/access_requests`, ownerToken,
+  { invitation_id: invite.body?.id, merchant_id: M.northwindUk, persona: "mview", purpose: "end-to-end grant check", ...window(7) });
+check("owner (maker) requests MVIEW on Northwind UK: awaiting independent approval", accessReq.status === 201
+  && accessReq.body?.status === "awaiting_independent_approval" && accessReq.etag === '"access-request-v1"', `HTTP ${accessReq.status}`);
+const reqPath = `${tenantPath}/access_requests/${accessReq.body?.id}`;
+const v1 = { "if-match": '"access-request-v1"' };
+check("the maker cannot approve their own request → 409 sod_conflict", (await gwPost(`${reqPath}/approval`, ownerToken, undefined, v1)).body?.code === "sod_conflict");
+check("the member cannot approve it → 404 (not a member of the tenant yet)", (await gwPost(`${reqPath}/approval`, memberToken, undefined, v1)).status === 404);
+check("merchant.ops (not an owner) cannot approve → 403", (await gwPost(`${reqPath}/approval`, ops, undefined, v1)).status === 403);
+const above = await gwPost(`${tenantPath}/access_requests`, ownerToken,
+  { invitation_id: invite.body?.id, persona: "mfin", purpose: "outlasts the owner", ...window(400) });
+check("a role outlasting the maker's own owner grant → 403 delegation_exceeded", above.status === 403 && above.body?.code === "delegation_exceeded");
+const ownerRole = await gwPost(`${tenantPath}/access_requests`, ownerToken,
+  { invitation_id: invite.body?.id, persona: "mown", purpose: "owner role", ...window(7) });
+check("an owner role cannot be requested → 403", ownerRole.status === 403);
+check("a stale If-Match → 409 version_conflict", (await gwPost(`${reqPath}/approval`, ownerBToken, undefined, { "if-match": '"access-request-v9"' })).body?.code === "version_conflict");
+const approval = await gwPost(`${reqPath}/approval`, ownerBToken, undefined, v1);
+check("a second owner (checker) approves: the grant exists", approval.status === 200 && approval.body?.status === "approved"
+  && /^mbr_/.test(approval.body?.membership_id ?? ""), `HTTP ${approval.status}`);
+
+const memberRead = await gw(`/v1/merchants/${M.northwindUk}`, memberToken);
+check("access works: the member reads Northwind UK", memberRead.status === 200 && memberRead.body?.id === M.northwindUk);
+const memberGrants = (await gw("/v1/principal", memberToken)).body?.grants ?? [];
+check("the member's principal is exactly MVIEW on Northwind UK", memberGrants.length === 1 && memberGrants[0].persona === "mview" && memberGrants[0].merchant_id === M.northwindUk);
+check("…and not Northwind EU", (await gw(`/v1/merchants/${M.northwindEu}`, memberToken)).status === 404);
+const memberConsole = client();
+await memberConsole.login(memberName, memberPassword);
+check("in the console the member is MVIEW and sees Northwind UK only",
+  (await memberConsole.get("/api/v1/me")).body?.data?.personas?.join() === "MVIEW"
+  && same(merchantsOf(await memberConsole.get("/api/v1/payments?pageSize=100")), new Set([M.northwindUk])));
+
+const revoke = await gwPost(`${tenantPath}/memberships/${approval.body?.membership_id}/revocation`, ownerToken, { reason: "end-to-end flow done" });
+check("the owner revokes the grant", revoke.status === 200 && revoke.body?.revoked_by?.subject === SUB.owner, `HTTP ${revoke.status}`);
+check("denied: the same token's next request → 404", (await gw(`/v1/merchants/${M.northwindUk}`, memberToken)).status === 404);
+check("denied: the same console session's next request has no access", (await memberConsole.get("/api/v1/me")).body?.data?.hasAccess === false);
+
+const events = asSuperuser(`SELECT string_agg(event_type, ',' ORDER BY occurred_at_utc) FROM merchant.grant_events
+  WHERE invitation_id = '${invite.body?.id}' OR access_request_id = '${accessReq.body?.id}' OR membership_id = '${approval.body?.membership_id}';`);
+check("every change left a grant event", events === "INVITATION_CREATED,INVITATION_ACCEPTED,ACCESS_REQUESTED,ACCESS_APPROVED,GRANT_CREATED,GRANT_REVOKED", events);
+let direct = "";
+try {
+  asGateway(`BEGIN;
+SELECT set_config('zp.tenant_id', '${T.northwind}', true) \\g /dev/null
+INSERT INTO merchant.memberships (id, issuer, subject, tenant_id, environment, persona, granted_by_issuer, granted_by_subject,
+  approved_by_issuer, approved_by_subject, granted_at_utc, effective_from_utc, expires_at_utc)
+VALUES (uuidv7(), '${ISSUER}', '${memberSub}', '${T.northwind}', 'TEST', 'MOWN', '${ISSUER}', '${SUB.owner}', '${ISSUER}', '${SUB.ownerB}', now(), now(), now() + interval '1 day');
+COMMIT;`);
+} catch (e) {
+  direct = String(e.stderr ?? e.message);
+}
+check("the database itself refuses a grant the runtime role writes directly", /owner grants are created only by tenant provisioning|approved access request/.test(direct));
+const noToken = asSuperuser(`SELECT count(*) FROM merchant.invitations WHERE position('zpinv_' in encode(token_hash, 'escape')) > 0;`);
+check("only the invitation token's hash is stored", noToken === "0");
 
 // Screens and step-up with real password re-entry.
 const refunds = await mops.get("/api/v1/screens/ZP-BRW-008");

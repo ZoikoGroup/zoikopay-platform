@@ -54,6 +54,9 @@ export const TEST_MEMBERSHIPS: Membership[] = [
     scope: { kind: "internal", legalEntityIds: BOTH_CELLS, tenantIds: ALL_TENANTS, merchantIds: "*", environments: ["TEST"] } },
   { sub: id(18), username: "iam.admin.b", displayName: "Jules Navarro", personas: ["PIAM"],
     scope: { kind: "internal", legalEntityIds: BOTH_CELLS, tenantIds: ALL_TENANTS, merchantIds: "*", environments: ["TEST"] } },
+  // Second Northwind owner: grant administration needs an independent checker (02-02 TENANT.ROLE.GRANT; Q40).
+  { sub: id(19), username: "merchant.owner.b", displayName: "Robin Ashby", personas: ["MOWN"],
+    scope: { kind: "merchant", legalEntityIds: BOTH_CELLS, tenantIds: [T.northwind], merchantIds: "*", environments: ["TEST"] } },
 ];
 
 /** Every local realm user: what the fake identity provider accepts. */

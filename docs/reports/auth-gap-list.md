@@ -59,6 +59,9 @@ What each depends on, in the suggested order.
    maker-checker and the "never above the delegator" rule enforced in both the
    database and the app, plus grant-change audit). Depends on 1 and 2. It
    unblocks the Access screen and AT-013 to AT-021.
+   **Update 2026-11-26: built without step-up**, with approvals and revocations
+   refused outside TEST until item 2 exists (OPEN_QUESTIONS Q40, including what
+   was left out). The console Access screen is not wired to it yet.
 4. **Session revocation:** logging out of Keycloak should cut off the gateway
    before the token expires (02-02 §2.2, A06). Depends on Security choosing
    introspection or session versions (ADR 0007 option 2). The session ID is

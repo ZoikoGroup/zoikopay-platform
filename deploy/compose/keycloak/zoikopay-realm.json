@@ -260,6 +260,23 @@
       "requiredActions": []
     },
     {
+      "id": "00000000-0000-4000-8000-000000000019",
+      "username": "merchant.owner.b",
+      "enabled": true,
+      "email": "merchant.owner.b@example.test",
+      "emailVerified": true,
+      "firstName": "Robin",
+      "lastName": "Ashby",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Zoiko@123",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
       "id": "00000000-0000-4000-8000-000000000011",
       "username": "merchant.ops",
       "enabled": true,

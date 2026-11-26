@@ -69,9 +69,9 @@ migrate-status: ## Show each migration file as applied, pending, CHANGED or MISS
 	ZP_MIGRATOR_DSN="$(ZP_MIGRATOR_DSN)" go run ./cmd/migrate status -dir db/migrations
 
 .PHONY: seed-local
-seed-local: ## Local stack only: synthetic tenants, merchants and grants for the console's merchant users (as zp_gateway; Q39)
-	$(COMPOSE) exec -T -e PGPASSWORD="$(ZP_APP_PASSWORD)" postgres \
-	  psql -X -q -h localhost -U zp_gateway -d zoikopay -v ON_ERROR_STOP=1 -f - < scripts/seed-local.sql
+seed-local: ## Local stack only: synthetic tenants, merchants, two owners and the merchant users' grants (as the provisioning role; Q39, Q40)
+	$(COMPOSE) exec -T postgres \
+	  psql -X -q -U postgres -d zoikopay -v ON_ERROR_STOP=1 -f - < scripts/seed-local.sql
 
 .PHONY: e2e-auth
 e2e-auth: ## Authentication end-to-end check from a CLEAN local stack (deletes local data; synthetic only). See docs/runbooks/local-auth-e2e.md
