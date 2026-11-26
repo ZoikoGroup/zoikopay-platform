@@ -24,7 +24,284 @@ tags:
     description: Merchant profiles (04-03).
   - name: principal
     description: What Zoiko Pay has decided the caller may act as (OPEN_QUESTIONS Q39).
+  - name: grants
+    description: >-
+      Grant administration for a tenant's members (02-02 WF-002, TENANT.USERS.INVITE,
+      TENANT.ROLE.GRANT, TENANT.ROLE.REVOKE; OPEN_QUESTIONS Q40). Owners (MOWN) invite,
+      request and approve the four delegable personas (MOPS, MFIN, MDEV, MVIEW); maker,
+      checker and member are three different people. A tenant the caller holds no grant
+      in answers 404, like one that does not exist.
 paths:
+  /tenants/{tenant_id}/invitations:
+    post:
+      operationId: createInvitation
+      tags: [grants]
+      summary: Invite someone to the tenant
+      description: >-
+        Creates a single-use invitation that expires after the deployment's configured
+        invitation lifetime (Q36 36.10). The response carries a one-time token, returned
+        only by this first response and stored only as a hash; deliver it out of band
+        (Q40). A replay of the same Idempotency-Key returns the invitation without the
+        token. Accepting an invitation grants nothing.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: The invitation, with its one-time token.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Invitation'}
+        '200':
+          description: Replay of the same request; the token is not repeated.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Invitation'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listInvitations
+      tags: [grants]
+      summary: The tenant's invitations
+      description: Invitations to this tenant in this environment, for its owners. Tokens are never listed.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Invitations, newest first. Tokens are never listed.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InvitationList'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /invitations/accept:
+    post:
+      operationId: acceptInvitation
+      tags: [grants]
+      summary: Accept an invitation
+      description: >-
+        The signed-in invitee redeems the token, sent in the body and never in the URL.
+        The invitation is bound to the caller's verified identity and can never be used
+        again (02-02 AT-014). An unknown, expired or used token gets the same 404. It
+        grants nothing: an owner must still request a role and another owner approve it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InvitationAcceptance'}
+      responses:
+        '200':
+          description: The accepted invitation.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Invitation'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tenants/{tenant_id}/access_requests:
+    post:
+      operationId: createAccessRequest
+      tags: [grants]
+      summary: Request a role for a member (maker)
+      description: >-
+        An owner whose own grant covers the requested scope asks for one delegable role
+        for a person who accepted an invitation to this tenant or already holds a grant
+        in it. The role cannot outlast the maker's own owner grant (Q36 36.12). The request
+        waits for an independent owner and expires after the deployment's configured
+        request lifetime.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AccessRequestCreate'}
+      responses:
+        '201':
+          description: The request, awaiting independent approval.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessRequest'}
+        '200':
+          description: Replay of the same request.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessRequest'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listAccessRequests
+      tags: [grants]
+      summary: The tenant's access requests
+      description: Requests whose scope the caller's owner grants cover; a lapsed request is reported as expired.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: status
+          in: query
+          required: false
+          description: Only requests in this status.
+          schema: {$ref: '#/components/schemas/AccessRequestStatus'}
+      responses:
+        '200':
+          description: Requests the caller's owner grants cover, newest first.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessRequestList'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tenants/{tenant_id}/access_requests/{access_request_id}/approval:
+    post:
+      operationId: approveAccessRequest
+      tags: [grants]
+      summary: Approve a request (checker)
+      description: >-
+        An owner other than the maker and the member approves; the grant is created in
+        the same transaction. Same person: 409 sod_conflict (02-02 §6.3). Needs If-Match
+        with the request's ETag; a stale version gets 409 version_conflict. Refused with
+        403 step_up_required on a LIVE deployment until step-up exists (Q40).
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/AccessRequestId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The approved request, naming the new grant.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessRequest'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tenants/{tenant_id}/access_requests/{access_request_id}/rejection:
+    post:
+      operationId: rejectAccessRequest
+      tags: [grants]
+      summary: Reject a request
+      description: >-
+        Any owner whose grant covers the request, other than the member, rejects it with
+        a reason. Needs If-Match with the request's ETag.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/AccessRequestId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Decision'}
+      responses:
+        '200':
+          description: The rejected request.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessRequest'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tenants/{tenant_id}/memberships:
+    get:
+      operationId: listMemberships
+      tags: [grants]
+      summary: The tenant's live grants
+      description: The WF-002 user table, limited to grants the caller's owner grants cover.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Live grants.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MembershipList'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tenants/{tenant_id}/memberships/{membership_id}/revocation:
+    post:
+      operationId: revokeMembership
+      tags: [grants]
+      summary: Revoke a grant
+      description: >-
+        An owner whose grant covers it revokes a delegable grant at once ("immediate
+        effective deny"); the next request by its holder is denied. Owner grants are
+        not revoked here (Q40). Refused with 403 step_up_required on a LIVE deployment
+        until step-up exists.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Decision'}
+      responses:
+        '200':
+          description: The revoked grant.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Membership'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /merchants/{merchant_id}:
     get:
       operationId: getMerchant
@@ -88,10 +365,43 @@ components:
       required: true
       description: Merchant id (mer_...). A malformed id returns 404 (Q37 37.5).
       schema: {type: string}
+    TenantId:
+      name: tenant_id
+      in: path
+      required: true
+      description: Tenant id (ten_...). A tenant the caller holds no grant in returns 404.
+      schema: {type: string}
+    AccessRequestId:
+      name: access_request_id
+      in: path
+      required: true
+      description: Access request id (acr_...). An unknown or uncovered request returns 404.
+      schema: {type: string}
+    MembershipId:
+      name: membership_id
+      in: path
+      required: true
+      description: Grant id (mbr_...). An unknown or uncovered grant returns 404.
+      schema: {type: string}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+      schema: {type: string}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The access request's ETag; a stale value gets 409 version_conflict.
+      schema: {type: string}
   headers:
     TraceId:
       description: Server-generated trace ID of this request (Q37 37.1).
       schema: {type: string, pattern: '^[0-9a-f]{32}$'}
+    ETag:
+      description: Access request version, for If-Match on its decision.
+      schema: {type: string}
   responses:
     Problem:
       description: RFC 9457 problem details (04-01 §8).
@@ -111,6 +421,138 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    Person:
+      type: object
+      additionalProperties: false
+      required: [issuer, subject]
+      description: A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+      properties:
+        issuer: {type: string}
+        subject: {type: string}
+    DelegablePersona:
+      type: string
+      description: The 02-02 merchant personas an owner may delegate, lower case on the wire. Owner (mown) grants are not created here (Q40).
+      enum: [mops, mfin, mdev, mview]
+    Invitation:
+      type: object
+      additionalProperties: false
+      required: [id, object, tenant_id, status, invited_by, created_at, expires_at]
+      properties:
+        id: {type: string, pattern: '^inv_[0-9a-f]{32}$'}
+        object: {type: string, enum: [invitation]}
+        tenant_id: {type: string, pattern: '^ten_[0-9a-f]{32}$'}
+        status: {type: string, enum: [pending, accepted, expired]}
+        invited_by: {$ref: '#/components/schemas/Person'}
+        accepted_by: {$ref: '#/components/schemas/Person'}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        accepted_at: {type: string, format: date-time}
+        token:
+          type: string
+          description: One-time invitation token. Present only in the first response to createInvitation.
+    InvitationList:
+      type: object
+      additionalProperties: false
+      required: [object, data]
+      properties:
+        object: {type: string, enum: [list]}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Invitation'}
+    InvitationAcceptance:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: {type: string}
+    AccessRequestStatus:
+      type: string
+      description: 03-05 §9.2 approval states, lower case on the wire.
+      enum: [awaiting_independent_approval, approved, rejected, expired]
+    AccessRequestCreate:
+      type: object
+      additionalProperties: false
+      required: [persona, effective_from, expires_at, purpose]
+      description: Exactly one of invitation_id (an accepted invitation) or membership_id (a grant the person already holds in this tenant) names the member.
+      properties:
+        invitation_id: {type: string}
+        membership_id: {type: string}
+        merchant_id:
+          type: string
+          description: Absent for a tenant-wide grant.
+        persona: {$ref: '#/components/schemas/DelegablePersona'}
+        effective_from: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        purpose: {type: string, minLength: 1, maxLength: 200}
+    AccessRequest:
+      type: object
+      additionalProperties: false
+      required: [id, object, tenant_id, member, persona, effective_from, expires_at, purpose, status,
+        requested_by, requested_at, decision_due_at, version]
+      properties:
+        id: {type: string, pattern: '^acr_[0-9a-f]{32}$'}
+        object: {type: string, enum: [access_request]}
+        tenant_id: {type: string, pattern: '^ten_[0-9a-f]{32}$'}
+        member: {$ref: '#/components/schemas/Person'}
+        merchant_id: {type: string, pattern: '^mer_[0-9a-f]{32}$'}
+        persona: {$ref: '#/components/schemas/DelegablePersona'}
+        effective_from: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        purpose: {type: string}
+        status: {$ref: '#/components/schemas/AccessRequestStatus'}
+        requested_by: {$ref: '#/components/schemas/Person'}
+        requested_at: {type: string, format: date-time}
+        decision_due_at: {type: string, format: date-time}
+        decided_by: {$ref: '#/components/schemas/Person'}
+        decided_at: {type: string, format: date-time}
+        decision_reason: {type: string}
+        membership_id: {type: string, pattern: '^mbr_[0-9a-f]{32}$'}
+        version: {type: integer, format: int64, minimum: 1}
+    AccessRequestList:
+      type: object
+      additionalProperties: false
+      required: [object, data]
+      properties:
+        object: {type: string, enum: [list]}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/AccessRequest'}
+    Decision:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 200}
+    Membership:
+      type: object
+      additionalProperties: false
+      required: [id, object, tenant_id, member, persona, effective_from, expires_at, granted_by, approved_by, granted_at]
+      properties:
+        id: {type: string, pattern: '^mbr_[0-9a-f]{32}$'}
+        object: {type: string, enum: [membership]}
+        tenant_id: {type: string, pattern: '^ten_[0-9a-f]{32}$'}
+        member: {$ref: '#/components/schemas/Person'}
+        merchant_id: {type: string, pattern: '^mer_[0-9a-f]{32}$'}
+        persona:
+          type: string
+          enum: [mown, mops, mfin, mdev, mview]
+        effective_from: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        granted_by: {$ref: '#/components/schemas/Person'}
+        approved_by: {$ref: '#/components/schemas/Person'}
+        granted_at: {type: string, format: date-time}
+        revoked_by: {$ref: '#/components/schemas/Person'}
+        revoked_at: {type: string, format: date-time}
+        access_request_id: {type: string, pattern: '^acr_[0-9a-f]{32}$'}
+    MembershipList:
+      type: object
+      additionalProperties: false
+      required: [object, data]
+      properties:
+        object: {type: string, enum: [list]}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Membership'}
     Merchant:
       type: object
       additionalProperties: false

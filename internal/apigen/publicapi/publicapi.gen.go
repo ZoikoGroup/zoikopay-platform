@@ -6,6 +6,7 @@
 package publicapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,27 +14,213 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AccessRequestObject.
+const (
+	AccessRequestObjectAccessRequest AccessRequestObject = "access_request"
+)
+
+// Valid indicates whether the value is a known member of the AccessRequestObject enum.
+func (e AccessRequestObject) Valid() bool {
+	switch e {
+	case AccessRequestObjectAccessRequest:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessRequestListObject.
+const (
+	AccessRequestListObjectList AccessRequestListObject = "list"
+)
+
+// Valid indicates whether the value is a known member of the AccessRequestListObject enum.
+func (e AccessRequestListObject) Valid() bool {
+	switch e {
+	case AccessRequestListObjectList:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessRequestStatus.
+const (
+	AccessRequestStatusApproved                    AccessRequestStatus = "approved"
+	AccessRequestStatusAwaitingIndependentApproval AccessRequestStatus = "awaiting_independent_approval"
+	AccessRequestStatusExpired                     AccessRequestStatus = "expired"
+	AccessRequestStatusRejected                    AccessRequestStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AccessRequestStatus enum.
+func (e AccessRequestStatus) Valid() bool {
+	switch e {
+	case AccessRequestStatusApproved:
+		return true
+	case AccessRequestStatusAwaitingIndependentApproval:
+		return true
+	case AccessRequestStatusExpired:
+		return true
+	case AccessRequestStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DelegablePersona.
+const (
+	DelegablePersonaMdev  DelegablePersona = "mdev"
+	DelegablePersonaMfin  DelegablePersona = "mfin"
+	DelegablePersonaMops  DelegablePersona = "mops"
+	DelegablePersonaMview DelegablePersona = "mview"
+)
+
+// Valid indicates whether the value is a known member of the DelegablePersona enum.
+func (e DelegablePersona) Valid() bool {
+	switch e {
+	case DelegablePersonaMdev:
+		return true
+	case DelegablePersonaMfin:
+		return true
+	case DelegablePersonaMops:
+		return true
+	case DelegablePersonaMview:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GrantPersona.
 const (
-	Mdev  GrantPersona = "mdev"
-	Mfin  GrantPersona = "mfin"
-	Mops  GrantPersona = "mops"
-	Mown  GrantPersona = "mown"
-	Mview GrantPersona = "mview"
+	GrantPersonaMdev  GrantPersona = "mdev"
+	GrantPersonaMfin  GrantPersona = "mfin"
+	GrantPersonaMops  GrantPersona = "mops"
+	GrantPersonaMown  GrantPersona = "mown"
+	GrantPersonaMview GrantPersona = "mview"
 )
 
 // Valid indicates whether the value is a known member of the GrantPersona enum.
 func (e GrantPersona) Valid() bool {
 	switch e {
-	case Mdev:
+	case GrantPersonaMdev:
 		return true
-	case Mfin:
+	case GrantPersonaMfin:
 		return true
-	case Mops:
+	case GrantPersonaMops:
 		return true
-	case Mown:
+	case GrantPersonaMown:
 		return true
-	case Mview:
+	case GrantPersonaMview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvitationObject.
+const (
+	InvitationObjectInvitation InvitationObject = "invitation"
+)
+
+// Valid indicates whether the value is a known member of the InvitationObject enum.
+func (e InvitationObject) Valid() bool {
+	switch e {
+	case InvitationObjectInvitation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvitationStatus.
+const (
+	InvitationStatusAccepted InvitationStatus = "accepted"
+	InvitationStatusExpired  InvitationStatus = "expired"
+	InvitationStatusPending  InvitationStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the InvitationStatus enum.
+func (e InvitationStatus) Valid() bool {
+	switch e {
+	case InvitationStatusAccepted:
+		return true
+	case InvitationStatusExpired:
+		return true
+	case InvitationStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvitationListObject.
+const (
+	InvitationListObjectList InvitationListObject = "list"
+)
+
+// Valid indicates whether the value is a known member of the InvitationListObject enum.
+func (e InvitationListObject) Valid() bool {
+	switch e {
+	case InvitationListObjectList:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MembershipObject.
+const (
+	MembershipObjectMembership MembershipObject = "membership"
+)
+
+// Valid indicates whether the value is a known member of the MembershipObject enum.
+func (e MembershipObject) Valid() bool {
+	switch e {
+	case MembershipObjectMembership:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MembershipPersona.
+const (
+	MembershipPersonaMdev  MembershipPersona = "mdev"
+	MembershipPersonaMfin  MembershipPersona = "mfin"
+	MembershipPersonaMops  MembershipPersona = "mops"
+	MembershipPersonaMown  MembershipPersona = "mown"
+	MembershipPersonaMview MembershipPersona = "mview"
+)
+
+// Valid indicates whether the value is a known member of the MembershipPersona enum.
+func (e MembershipPersona) Valid() bool {
+	switch e {
+	case MembershipPersonaMdev:
+		return true
+	case MembershipPersonaMfin:
+		return true
+	case MembershipPersonaMops:
+		return true
+	case MembershipPersonaMown:
+		return true
+	case MembershipPersonaMview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MembershipListObject.
+const (
+	MembershipListObjectList MembershipListObject = "list"
+)
+
+// Valid indicates whether the value is a known member of the MembershipListObject enum.
+func (e MembershipListObject) Valid() bool {
+	switch e {
+	case MembershipListObjectList:
 		return true
 	default:
 		return false
@@ -57,34 +244,34 @@ func (e MerchantObject) Valid() bool {
 
 // Defines values for MerchantStatus.
 const (
-	Closed           MerchantStatus = "closed"
-	Draft            MerchantStatus = "draft"
-	NeedsInformation MerchantStatus = "needs_information"
-	Rejected         MerchantStatus = "rejected"
-	Submitted        MerchantStatus = "submitted"
-	Suspended        MerchantStatus = "suspended"
-	UnderReview      MerchantStatus = "under_review"
-	Verified         MerchantStatus = "verified"
+	MerchantStatusClosed           MerchantStatus = "closed"
+	MerchantStatusDraft            MerchantStatus = "draft"
+	MerchantStatusNeedsInformation MerchantStatus = "needs_information"
+	MerchantStatusRejected         MerchantStatus = "rejected"
+	MerchantStatusSubmitted        MerchantStatus = "submitted"
+	MerchantStatusSuspended        MerchantStatus = "suspended"
+	MerchantStatusUnderReview      MerchantStatus = "under_review"
+	MerchantStatusVerified         MerchantStatus = "verified"
 )
 
 // Valid indicates whether the value is a known member of the MerchantStatus enum.
 func (e MerchantStatus) Valid() bool {
 	switch e {
-	case Closed:
+	case MerchantStatusClosed:
 		return true
-	case Draft:
+	case MerchantStatusDraft:
 		return true
-	case NeedsInformation:
+	case MerchantStatusNeedsInformation:
 		return true
-	case Rejected:
+	case MerchantStatusRejected:
 		return true
-	case Submitted:
+	case MerchantStatusSubmitted:
 		return true
-	case Suspended:
+	case MerchantStatusSuspended:
 		return true
-	case UnderReview:
+	case MerchantStatusUnderReview:
 		return true
-	case Verified:
+	case MerchantStatusVerified:
 		return true
 	default:
 		return false
@@ -124,6 +311,76 @@ func (e PrincipalObject) Valid() bool {
 	}
 }
 
+// AccessRequest defines model for AccessRequest.
+type AccessRequest struct {
+	DecidedAt *time.Time `json:"decided_at,omitempty"`
+
+	// DecidedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	DecidedBy      *Person   `json:"decided_by,omitempty"`
+	DecisionDueAt  time.Time `json:"decision_due_at"`
+	DecisionReason *string   `json:"decision_reason,omitempty"`
+	EffectiveFrom  time.Time `json:"effective_from"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	Id             string    `json:"id"`
+
+	// Member A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	Member       Person              `json:"member"`
+	MembershipId *string             `json:"membership_id,omitempty"`
+	MerchantId   *string             `json:"merchant_id,omitempty"`
+	Object       AccessRequestObject `json:"object"`
+
+	// Persona The 02-02 merchant personas an owner may delegate, lower case on the wire. Owner (mown) grants are not created here (Q40).
+	Persona     DelegablePersona `json:"persona"`
+	Purpose     string           `json:"purpose"`
+	RequestedAt time.Time        `json:"requested_at"`
+
+	// RequestedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	RequestedBy Person `json:"requested_by"`
+
+	// Status 03-05 §9.2 approval states, lower case on the wire.
+	Status   AccessRequestStatus `json:"status"`
+	TenantId string              `json:"tenant_id"`
+	Version  int64               `json:"version"`
+}
+
+// AccessRequestObject defines model for AccessRequest.Object.
+type AccessRequestObject string
+
+// AccessRequestCreate Exactly one of invitation_id (an accepted invitation) or membership_id (a grant the person already holds in this tenant) names the member.
+type AccessRequestCreate struct {
+	EffectiveFrom time.Time `json:"effective_from"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	InvitationId  *string   `json:"invitation_id,omitempty"`
+	MembershipId  *string   `json:"membership_id,omitempty"`
+
+	// MerchantId Absent for a tenant-wide grant.
+	MerchantId *string `json:"merchant_id,omitempty"`
+
+	// Persona The 02-02 merchant personas an owner may delegate, lower case on the wire. Owner (mown) grants are not created here (Q40).
+	Persona DelegablePersona `json:"persona"`
+	Purpose string           `json:"purpose"`
+}
+
+// AccessRequestList defines model for AccessRequestList.
+type AccessRequestList struct {
+	Data   []AccessRequest         `json:"data"`
+	Object AccessRequestListObject `json:"object"`
+}
+
+// AccessRequestListObject defines model for AccessRequestList.Object.
+type AccessRequestListObject string
+
+// AccessRequestStatus 03-05 §9.2 approval states, lower case on the wire.
+type AccessRequestStatus string
+
+// Decision defines model for Decision.
+type Decision struct {
+	Reason string `json:"reason"`
+}
+
+// DelegablePersona The 02-02 merchant personas an owner may delegate, lower case on the wire. Owner (mown) grants are not created here (Q40).
+type DelegablePersona string
+
 // Grant defines model for Grant.
 type Grant struct {
 	EffectiveFrom time.Time `json:"effective_from"`
@@ -139,6 +396,87 @@ type Grant struct {
 
 // GrantPersona 02-02 merchant persona code, lower case on the wire (ADR 0001).
 type GrantPersona string
+
+// Invitation defines model for Invitation.
+type Invitation struct {
+	AcceptedAt *time.Time `json:"accepted_at,omitempty"`
+
+	// AcceptedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	AcceptedBy *Person   `json:"accepted_by,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Id         string    `json:"id"`
+
+	// InvitedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	InvitedBy Person           `json:"invited_by"`
+	Object    InvitationObject `json:"object"`
+	Status    InvitationStatus `json:"status"`
+	TenantId  string           `json:"tenant_id"`
+
+	// Token One-time invitation token. Present only in the first response to createInvitation.
+	Token *string `json:"token,omitempty"`
+}
+
+// InvitationObject defines model for Invitation.Object.
+type InvitationObject string
+
+// InvitationStatus defines model for Invitation.Status.
+type InvitationStatus string
+
+// InvitationAcceptance defines model for InvitationAcceptance.
+type InvitationAcceptance struct {
+	Token string `json:"token"`
+}
+
+// InvitationList defines model for InvitationList.
+type InvitationList struct {
+	Data   []Invitation         `json:"data"`
+	Object InvitationListObject `json:"object"`
+}
+
+// InvitationListObject defines model for InvitationList.Object.
+type InvitationListObject string
+
+// Membership defines model for Membership.
+type Membership struct {
+	AccessRequestId *string `json:"access_request_id,omitempty"`
+
+	// ApprovedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	ApprovedBy    Person    `json:"approved_by"`
+	EffectiveFrom time.Time `json:"effective_from"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	GrantedAt     time.Time `json:"granted_at"`
+
+	// GrantedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	GrantedBy Person `json:"granted_by"`
+	Id        string `json:"id"`
+
+	// Member A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	Member     Person            `json:"member"`
+	MerchantId *string           `json:"merchant_id,omitempty"`
+	Object     MembershipObject  `json:"object"`
+	Persona    MembershipPersona `json:"persona"`
+	RevokedAt  *time.Time        `json:"revoked_at,omitempty"`
+
+	// RevokedBy A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+	RevokedBy *Person `json:"revoked_by,omitempty"`
+	TenantId  string  `json:"tenant_id"`
+}
+
+// MembershipObject defines model for Membership.Object.
+type MembershipObject string
+
+// MembershipPersona defines model for Membership.Persona.
+type MembershipPersona string
+
+// MembershipList defines model for MembershipList.
+type MembershipList struct {
+	Data   []Membership         `json:"data"`
+	Object MembershipListObject `json:"object"`
+}
+
+// MembershipListObject defines model for MembershipList.Object.
+type MembershipListObject string
 
 // Merchant defines model for Merchant.
 type Merchant struct {
@@ -158,6 +496,12 @@ type MerchantObject string
 
 // MerchantStatus Registration and review lifecycle only (04-03 §4); never proof of payment eligibility.
 type MerchantStatus string
+
+// Person A verified identity (token issuer and subject). Never an email address (02-02 §6.1).
+type Person struct {
+	Issuer  string `json:"issuer"`
+	Subject string `json:"subject"`
+}
 
 // Principal defines model for Principal.
 type Principal struct {
@@ -193,20 +537,122 @@ type Problem struct {
 	Type      string  `json:"type"`
 }
 
+// AccessRequestId defines model for AccessRequestId.
+type AccessRequestId = string
+
+// IdempotencyKey defines model for IdempotencyKey.
+type IdempotencyKey = string
+
+// IfMatch defines model for IfMatch.
+type IfMatch = string
+
+// MembershipId defines model for MembershipId.
+type MembershipId = string
+
 // MerchantId defines model for MerchantId.
 type MerchantId = string
+
+// TenantId defines model for TenantId.
+type TenantId = string
 
 // Unauthenticated defines model for Unauthenticated.
 type Unauthenticated = Problem
 
+// AcceptInvitationParams defines parameters for AcceptInvitation.
+type AcceptInvitationParams struct {
+	// IdempotencyKey Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ListAccessRequestsParams defines parameters for ListAccessRequests.
+type ListAccessRequestsParams struct {
+	// Status Only requests in this status.
+	Status *AccessRequestStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// CreateAccessRequestParams defines parameters for CreateAccessRequest.
+type CreateAccessRequestParams struct {
+	// IdempotencyKey Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ApproveAccessRequestParams defines parameters for ApproveAccessRequest.
+type ApproveAccessRequestParams struct {
+	// IfMatch The access request's ETag; a stale value gets 409 version_conflict.
+	IfMatch IfMatch `json:"If-Match"`
+
+	// IdempotencyKey Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RejectAccessRequestParams defines parameters for RejectAccessRequest.
+type RejectAccessRequestParams struct {
+	// IfMatch The access request's ETag; a stale value gets 409 version_conflict.
+	IfMatch IfMatch `json:"If-Match"`
+
+	// IdempotencyKey Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// CreateInvitationParams defines parameters for CreateInvitation.
+type CreateInvitationParams struct {
+	// IdempotencyKey Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RevokeMembershipParams defines parameters for RevokeMembership.
+type RevokeMembershipParams struct {
+	// IdempotencyKey Client-generated UUID; a retry with the same key and body replays the first result (04-08).
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// AcceptInvitationJSONRequestBody defines body for AcceptInvitation for application/json ContentType.
+type AcceptInvitationJSONRequestBody = InvitationAcceptance
+
+// CreateAccessRequestJSONRequestBody defines body for CreateAccessRequest for application/json ContentType.
+type CreateAccessRequestJSONRequestBody = AccessRequestCreate
+
+// RejectAccessRequestJSONRequestBody defines body for RejectAccessRequest for application/json ContentType.
+type RejectAccessRequestJSONRequestBody = Decision
+
+// RevokeMembershipJSONRequestBody defines body for RevokeMembership for application/json ContentType.
+type RevokeMembershipJSONRequestBody = Decision
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// AcceptInvitation Accept an invitation
+	// (POST /invitations/accept)
+	AcceptInvitation(w http.ResponseWriter, r *http.Request, params AcceptInvitationParams)
 	// GetMerchant Retrieve a merchant
 	// (GET /merchants/{merchant_id})
 	GetMerchant(w http.ResponseWriter, r *http.Request, merchantId MerchantId)
 	// GetPrincipal The caller's own live grants
 	// (GET /principal)
 	GetPrincipal(w http.ResponseWriter, r *http.Request)
+	// ListAccessRequests The tenant's access requests
+	// (GET /tenants/{tenant_id}/access_requests)
+	ListAccessRequests(w http.ResponseWriter, r *http.Request, tenantId TenantId, params ListAccessRequestsParams)
+	// CreateAccessRequest Request a role for a member (maker)
+	// (POST /tenants/{tenant_id}/access_requests)
+	CreateAccessRequest(w http.ResponseWriter, r *http.Request, tenantId TenantId, params CreateAccessRequestParams)
+	// ApproveAccessRequest Approve a request (checker)
+	// (POST /tenants/{tenant_id}/access_requests/{access_request_id}/approval)
+	ApproveAccessRequest(w http.ResponseWriter, r *http.Request, tenantId TenantId, accessRequestId AccessRequestId, params ApproveAccessRequestParams)
+	// RejectAccessRequest Reject a request
+	// (POST /tenants/{tenant_id}/access_requests/{access_request_id}/rejection)
+	RejectAccessRequest(w http.ResponseWriter, r *http.Request, tenantId TenantId, accessRequestId AccessRequestId, params RejectAccessRequestParams)
+	// ListInvitations The tenant's invitations
+	// (GET /tenants/{tenant_id}/invitations)
+	ListInvitations(w http.ResponseWriter, r *http.Request, tenantId TenantId)
+	// CreateInvitation Invite someone to the tenant
+	// (POST /tenants/{tenant_id}/invitations)
+	CreateInvitation(w http.ResponseWriter, r *http.Request, tenantId TenantId, params CreateInvitationParams)
+	// ListMemberships The tenant's live grants
+	// (GET /tenants/{tenant_id}/memberships)
+	ListMemberships(w http.ResponseWriter, r *http.Request, tenantId TenantId)
+	// RevokeMembership Revoke a grant
+	// (POST /tenants/{tenant_id}/memberships/{membership_id}/revocation)
+	RevokeMembership(w http.ResponseWriter, r *http.Request, tenantId TenantId, membershipId MembershipId, params RevokeMembershipParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -217,6 +663,51 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AcceptInvitation operation middleware
+func (siw *ServerInterfaceWrapper) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AcceptInvitationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcceptInvitation(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetMerchant operation middleware
 func (siw *ServerInterfaceWrapper) GetMerchant(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +740,443 @@ func (siw *ServerInterfaceWrapper) GetPrincipal(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPrincipal(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAccessRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListAccessRequests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAccessRequestsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAccessRequests(w, r, tenantId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAccessRequest operation middleware
+func (siw *ServerInterfaceWrapper) CreateAccessRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAccessRequestParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAccessRequest(w, r, tenantId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveAccessRequest operation middleware
+func (siw *ServerInterfaceWrapper) ApproveAccessRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "access_request_id" -------------
+	var accessRequestId AccessRequestId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "access_request_id", r.PathValue("access_request_id"), &accessRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "access_request_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApproveAccessRequestParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveAccessRequest(w, r, tenantId, accessRequestId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectAccessRequest operation middleware
+func (siw *ServerInterfaceWrapper) RejectAccessRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "access_request_id" -------------
+	var accessRequestId AccessRequestId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "access_request_id", r.PathValue("access_request_id"), &accessRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "access_request_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RejectAccessRequestParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectAccessRequest(w, r, tenantId, accessRequestId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInvitations operation middleware
+func (siw *ServerInterfaceWrapper) ListInvitations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvitations(w, r, tenantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInvitation operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateInvitationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvitation(w, r, tenantId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMemberships operation middleware
+func (siw *ServerInterfaceWrapper) ListMemberships(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMemberships(w, r, tenantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeMembership operation middleware
+func (siw *ServerInterfaceWrapper) RevokeMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tenant_id" -------------
+	var tenantId TenantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tenant_id", r.PathValue("tenant_id"), &tenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "membership_id" -------------
+	var membershipId MembershipId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membership_id", r.PathValue("membership_id"), &membershipId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membership_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeMembershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeMembership(w, r, tenantId, membershipId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -378,6 +1306,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tenants/{tenant_id}/invitations", wrapper.ListInvitations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tenants/{tenant_id}/invitations", wrapper.CreateInvitation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invitations/accept", wrapper.AcceptInvitation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tenants/{tenant_id}/access_requests", wrapper.ListAccessRequests)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tenants/{tenant_id}/access_requests", wrapper.CreateAccessRequest)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tenants/{tenant_id}/access_requests/{access_request_id}/approval", wrapper.ApproveAccessRequest)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tenants/{tenant_id}/access_requests/{access_request_id}/rejection", wrapper.RejectAccessRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tenants/{tenant_id}/memberships", wrapper.ListMemberships)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tenants/{tenant_id}/memberships/{membership_id}/revocation", wrapper.RevokeMembership)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/merchants/{merchant_id}", wrapper.GetMerchant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/principal", wrapper.GetPrincipal)
 

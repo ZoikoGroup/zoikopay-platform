@@ -25,6 +25,12 @@ const (
 	RateLimitExceeded              Code = "rate_limit_exceeded"
 	ProviderOutcomeUnknown         Code = "provider_outcome_unknown"
 	TemporarilyUnavailable         Code = "temporarily_unavailable"
+	// Grant administration (02-02 §6.3; OPEN_QUESTIONS Q40).
+	SoDConflict          Code = "sod_conflict"          // maker, checker and member must differ
+	DelegationExceeded   Code = "delegation_exceeded"   // above the delegator's own owner grant
+	StepUpRequired       Code = "step_up_required"      // needs step-up, which is not built
+	VersionConflict      Code = "version_conflict"      // If-Match names another version
+	PreconditionRequired Code = "precondition_required" // If-Match missing
 	// InternalError is not in the 04-01 table; it is the safe fallback for
 	// unexpected failures and never carries internal detail.
 	InternalError Code = "internal_error"
@@ -49,6 +55,11 @@ var codes = map[Code]codeInfo{
 	RateLimitExceeded:              {http.StatusTooManyRequests, "Too many requests", true},
 	ProviderOutcomeUnknown:         {http.StatusConflict, "Provider outcome is not yet known", false},
 	TemporarilyUnavailable:         {http.StatusServiceUnavailable, "Service temporarily unavailable", true},
+	SoDConflict:                    {http.StatusConflict, "An independent person must act", false},
+	DelegationExceeded:             {http.StatusForbidden, "Beyond your own owner grant", false},
+	StepUpRequired:                 {http.StatusForbidden, "Step-up authentication required", false},
+	VersionConflict:                {http.StatusConflict, "The resource has changed", false},
+	PreconditionRequired:           {http.StatusPreconditionRequired, "If-Match header is required", false},
 	InternalError:                  {http.StatusInternalServerError, "Internal error", false},
 }
 

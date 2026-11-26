@@ -41,6 +41,10 @@ export ZP_OIDC_JWKS_URL="${ZP_OIDC_ISSUER}/protocol/openid-connect/certs"
 export ZP_OIDC_REQUIRED_CLAIMS="${ZP_OIDC_REQUIRED_CLAIMS:-typ=Bearer}"
 # The local stack is a sandbox (OPEN_QUESTIONS Q37 37.14).
 export ZP_ENVIRONMENT="${ZP_ENVIRONMENT:-TEST}"
+# Grant administration lifetimes: required, no default in the gateway
+# (OPEN_QUESTIONS Q40). These are local development values only.
+export ZP_INVITATION_TTL="${ZP_INVITATION_TTL:-72h}"
+export ZP_ACCESS_REQUEST_TTL="${ZP_ACCESS_REQUEST_TTL:-72h}"
 export ZP_S3_ENDPOINT="http://localhost:${ZP_MINIO_PORT:-9000}"
 
 exec "$@"

@@ -29,6 +29,9 @@ type Deps struct {
 	Log         *slog.Logger
 	Audit       audit.Recorder // BC-08 audit log, as zp_audit (OPEN_QUESTIONS Q38)
 	Environment string         // the deployment's, TEST or LIVE
+	// Grant administration lifetimes: required, no defaults (Q36 36.10, Q40).
+	InvitationTTL time.Duration
+	RequestTTL    time.Duration
 }
 
 const detailNotFound = "The requested resource was not found."
@@ -38,16 +41,19 @@ const detailNotFound = "The requested resource was not found."
 // for every /v1 path and cannot discover which routes exist (Q37 37.15).
 // Every /v1 request, allowed, denied or failed, leaves one audit entry; the
 // audit middleware sits outside authentication so it records 401s too, and
-// withholds the response if the entry cannot be written (Q38).
-func Mount(mux *stdhttp.ServeMux, d Deps) {
+// withholds the response if the entry cannot be written (Q38). It refuses
+// incomplete configuration rather than serving with defaults.
+func Mount(mux *stdhttp.ServeMux, d Deps) error {
+	grants, err := app.NewGrantAdmin(d.Pool, d.Environment, d.InvitationTTL, d.RequestTTL)
+	if err != nil {
+		return err
+	}
 	api := stdhttp.NewServeMux()
-	h := &Handler{merchants: app.Merchants{Pool: d.Pool}, log: d.Log}
+	h := &Handler{merchants: app.Merchants{Pool: d.Pool}, grants: grants, log: d.Log}
 	publicapi.HandlerWithOptions(h, publicapi.StdHTTPServerOptions{
-		BaseRouter: api,
-		BaseURL:    "/v1",
-		ErrorHandlerFunc: func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ error) {
-			httpauth.WriteProblem(w, r, apierror.New(apierror.ResourceNotFound, detailNotFound))
-		},
+		BaseRouter:       api,
+		BaseURL:          "/v1",
+		ErrorHandlerFunc: paramError,
 	})
 	api.HandleFunc("/v1/", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		audit.Describe(r.Context(), "unknownRoute", "", "", "")
@@ -55,11 +61,32 @@ func Mount(mux *stdhttp.ServeMux, d Deps) {
 	})
 	authenticated := httpauth.Authenticate(d.Verifier, d.Resolver, d.Log)(api)
 	mux.Handle("/v1/", audit.Middleware(d.Audit, d.Environment, d.Log)(authenticated))
+	return nil
+}
+
+// paramError answers a request whose parameters the generated router
+// rejected: a missing Idempotency-Key is 400 (04-08), a missing If-Match 428;
+// anything else, such as a malformed path value, is the same 404 as an
+// unknown resource (Q37 37.5).
+func paramError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) {
+	var missing *publicapi.RequiredHeaderError
+	if errors.As(err, &missing) {
+		switch missing.ParamName {
+		case "Idempotency-Key":
+			httpauth.WriteProblem(w, r, apierror.New(apierror.IdempotencyKeyRequired, "Send an Idempotency-Key header (a quoted UUID)."))
+			return
+		case "If-Match":
+			httpauth.WriteProblem(w, r, apierror.New(apierror.PreconditionRequired, "Send If-Match with the request's ETag."))
+			return
+		}
+	}
+	httpauth.WriteProblem(w, r, apierror.New(apierror.ResourceNotFound, detailNotFound))
 }
 
 // Handler implements the public API's merchant operations.
 type Handler struct {
 	merchants app.Merchants
+	grants    *app.GrantAdmin
 	log       *slog.Logger
 }
 

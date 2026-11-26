@@ -133,6 +133,11 @@ func (g *gateway) merchant(tenant, env, name string) string {
 }
 
 func (g *gateway) grant(sub, tenant, merchant, persona string) string {
+	return g.grantFor(sub, tenant, merchant, "TEST", persona, 48*time.Hour)
+}
+
+// grantFor provisions a grant in environment that lasts for lasts.
+func (g *gateway) grantFor(sub, tenant, merchant, environment, persona string, lasts time.Duration) string {
 	id := ids.NewInternal()
 	var m any
 	if merchant != "" {
@@ -141,13 +146,25 @@ func (g *gateway) grant(sub, tenant, merchant, persona string) string {
 	at := time.Now().UTC().Add(-time.Hour)
 	g.provision(`INSERT INTO merchant.memberships (id, issuer, subject, tenant_id, merchant_id, environment, persona,
 		granted_by_issuer, granted_by_subject, approved_by_issuer, approved_by_subject, granted_at_utc, effective_from_utc, expires_at_utc)
-		VALUES ($1::uuid, $2, $3, $4, $5, 'TEST', $6, $2, $7, $2, $8, $9, $9, $10)`,
-		id, issuer, sub, tenant, m, persona, makerID, checkID, at, at.Add(48*time.Hour))
+		VALUES ($1::uuid, $2, $3, $4, $5, $11, $6, $2, $7, $2, $8, $9, $9, $10)`,
+		id, issuer, sub, tenant, m, persona, makerID, checkID, at, at.Add(lasts), environment)
 	return id
 }
 
-func setup(t *testing.T) *gateway {
+// options for setup: the deployment's environment and the grant
+// administration lifetimes, which have no defaults (Q36 36.10, Q40).
+type options struct {
+	environment   string
+	invitationTTL time.Duration
+	requestTTL    time.Duration
+}
+
+func setup(t *testing.T, opts ...func(*options)) *gateway {
 	t.Helper()
+	o := options{environment: "TEST", invitationTTL: time.Hour, requestTTL: time.Hour}
+	for _, f := range opts {
+		f(&o)
+	}
 	pg := dbtest.Start(t)
 	r := migrate.Runner{Pool: pg.Pool(t, "zp_migrator"), Source: os.DirFS(filepath.Join(dbtest.RepoRoot(t), "db", "migrations"))}
 	if _, err := r.Up(t.Context()); err != nil {
@@ -167,7 +184,7 @@ func setup(t *testing.T) *gateway {
 		t.Fatal(err)
 	}
 	gw := pg.Pool(t, "zp_gateway")
-	resolver, err := authz.NewResolver(store.NewGrantSource(gw), "TEST", nil)
+	resolver, err := authz.NewResolver(store.NewGrantSource(gw), o.environment, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +192,10 @@ func setup(t *testing.T) *gateway {
 	log := slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	srv := httpserver.New(httpserver.Config{Name: "gateway"}, log)
 	auditStore := governance.NewAuditLog(pg.Pool(t, "zp_audit"))
-	merchanthttp.Mount(srv.Mux(), merchanthttp.Deps{Pool: gw, Verifier: verifier, Resolver: resolver, Log: log,
-		Audit: auditStore, Environment: "TEST"})
+	if err := merchanthttp.Mount(srv.Mux(), merchanthttp.Deps{Pool: gw, Verifier: verifier, Resolver: resolver, Log: log,
+		Audit: auditStore, Environment: o.environment, InvitationTTL: o.invitationTTL, RequestTTL: o.requestTTL}); err != nil {
+		t.Fatal(err)
+	}
 	return &gateway{t: t, handler: srv.Handler(), key: key, gw: gw, logs: logs, audit: auditStore, su: pg.Pool(t, "postgres")}
 }
 
