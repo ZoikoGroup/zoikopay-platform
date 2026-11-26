@@ -1,210 +1,460 @@
-// End-to-end check against the REAL stack: Keycloak realm "zoikopay", the Go
-// gateway (8080) reading merchant.memberships in Postgres, the console backend
-// (4000) and the frontend server (5173, proxying /api and /auth).
+// Authentication end-to-end check against the REAL local stack: Keycloak
+// realm "zoikopay", the Go gateway (8080) reading merchant.memberships and
+// writing governance.audit_events in Postgres, the console backend (4000) and
+// the frontend server (5173, proxying /api and /auth).
 //
-// Roles come only from merchant.memberships through the gateway (OPEN_QUESTIONS
-// Q39). This script revokes a real grant in Postgres mid-session and checks the
-// very next console request is denied, then restores it with a new grant.
+// Run it from a clean stack with `make e2e-auth` (repo root), which starts and
+// stops everything and passes the log directory. `npm run test:e2e` runs the
+// same checks against servers you started yourself; the log checks then SKIP.
 //
-// Prerequisites (repo root): `make up`, `make migrate`, `make seed-local`,
-// `make run-gateway`; then the backend and frontend dev servers.
-// Run: npm run test:e2e   (from backend)
-//
-// SYNTHETIC DATA ONLY: local realm users and the local seed.
+// SYNTHETIC DATA ONLY: the local realm's fictional users, the local seed
+// (scripts/seed-local.sql) and tokens minted here. Refuses any non-local URL.
+// It changes the local realm for a few seconds (a short token lifespan, extra
+// claims and roles) and puts every change back. Tokens are never printed.
 
+import { createHmac, generateKeyPairSync, sign } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const CONSOLE = process.env.E2E_CONSOLE_URL ?? "http://localhost:5173";
-const GATEWAY = process.env.E2E_GATEWAY_URL ?? "http://localhost:8080";
-const PASSWORD = process.env.E2E_PASSWORD ?? "Zoiko@123";
+const env = process.env;
+const CONSOLE = env.E2E_CONSOLE_URL ?? "http://localhost:5173";
+const GATEWAY = env.E2E_GATEWAY_URL ?? "http://localhost:8080";
+const KEYCLOAK = env.E2E_KEYCLOAK_URL ?? "http://localhost:8180";
+const ISSUER = `${KEYCLOAK}/realms/zoikopay`;
+const PASSWORD = env.E2E_PASSWORD ?? "Zoiko@123"; // local realm users only
+const CONSOLE_CLIENT = { id: "zoikopay-console", secret: env.OIDC_CLIENT_SECRET ?? "local-dev-only-console-secret" };
+const SERVICE_CLIENT = { id: "zoikopay-console-admin", secret: env.ACCOUNT_ADMIN_CLIENT_SECRET ?? "local-dev-only-account-admin-secret" };
+const KEYCLOAK_ADMIN_PASSWORD = env.ZP_KEYCLOAK_ADMIN_PASSWORD ?? "local-dev-only-admin";
+const LOG_DIR = env.E2E_LOG_DIR; // set by scripts/e2e-auth.sh
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const ISSUER = "http://localhost:8180/realms/zoikopay";
+const COMPOSE = ["compose", "-f", join(REPO, "deploy", "compose", "compose.yaml")];
 
-// Same IDs as backend/src/database/fixtures.ts and scripts/seed-local.sql.
-const NORTHWIND = "ten_019a0000000170008000000000000001";
-const NORTHWIND_UK = "mer_019a0000010170008000000000000101";
-const NORTHWIND_EU = "mer_019a0000010270008000000000000102";
-const ALDER_BOOKS = "mer_019a0000020170008000000000000201";
-const ALDER_TRAVEL = "mer_019a0000020270008000000000000202";
-const MERCHANT_FINANCE_SUB = "00000000-0000-4000-8000-000000000014";
-
-let failures = 0;
-function check(name, ok, detail = "") {
-  console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? `  (${detail})` : ""}`);
-  if (!ok) failures++;
+for (const u of [CONSOLE, GATEWAY, KEYCLOAK]) {
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(u).hostname)) throw new Error(`refusing non-local URL ${u}: synthetic local stack only`);
 }
 
-/** A browser-like client: keeps the session cookie and sends the console Origin on writes. */
+// Same IDs as backend/src/database/fixtures.ts and scripts/seed-local.sql.
+const T = { northwind: "ten_019a0000000170008000000000000001", alder: "ten_019a0000000270008000000000000002" };
+const M = {
+  northwindUk: "mer_019a0000010170008000000000000101", northwindEu: "mer_019a0000010270008000000000000102",
+  alderBooks: "mer_019a0000020170008000000000000201", alderTravel: "mer_019a0000020270008000000000000202",
+  unknown: "mer_019a0000099970008000000000000999",
+};
+const sub = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const SUB = { superAdmin: sub(1), support: sub(6), owner: sub(10), ops: sub(11), viewer: sub(12), finance: sub(14), dev: sub(15) };
+
+// --- reporting ---------------------------------------------------------------
+let failures = 0;
+let passes = 0;
+function check(name, ok, detail = "") {
+  console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? `  (${detail})` : ""}`);
+  if (ok) passes++; else failures++;
+}
+const skip = (name, why) => console.log(`SKIP ${name}  (${why})`);
+const section = (title) => console.log(`\n== ${title}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const same = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+
+/** Every token obtained or forged in this run; the logs and the audit table must contain none of them. */
+const secrets = new Set();
+const keep = (t) => { if (t) secrets.add(t); return t; };
+
+// --- Keycloak ------------------------------------------------------------------
+async function tokenRequest(realmUrl, params) {
+  const res = await fetch(`${realmUrl}/protocol/openid-connect/token`, { method: "POST", body: new URLSearchParams(params), signal: AbortSignal.timeout(10_000) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`token request failed (${res.status} ${body.error ?? ""})`);
+  for (const k of ["access_token", "id_token", "refresh_token"]) keep(body[k]);
+  return body;
+}
+/** A user's tokens from the console client (the same grant the console uses). */
+const userTokens = (username) => tokenRequest(ISSUER, {
+  grant_type: "password", client_id: CONSOLE_CLIENT.id, client_secret: CONSOLE_CLIENT.secret, username, password: PASSWORD, scope: "openid profile",
+});
+
+let adminToken;
+const adminSignIn = async () => (adminToken = (await tokenRequest(`${KEYCLOAK}/realms/master`,
+  { grant_type: "password", client_id: "admin-cli", username: "admin", password: KEYCLOAK_ADMIN_PASSWORD })).access_token);
+/** Local Keycloak admin API. The admin token lasts 60 s, so a refused token is renewed once. */
+async function admin(method, path, body) {
+  const send = () => fetch(`${KEYCLOAK}/admin/realms/zoikopay${path}`, {
+    method, headers: { authorization: `Bearer ${adminToken}`, ...(body ? { "content-type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10_000),
+  });
+  if (!adminToken) await adminSignIn();
+  let res = await send();
+  if (res.status === 401) { await adminSignIn(); res = await send(); }
+  if (!res.ok && res.status !== 404) throw new Error(`Keycloak admin ${method} ${path}: ${res.status}`);
+  return res.status === 204 || res.status === 201 ? null : res.json().catch(() => null);
+}
+/** Puts a realm change back; a failure is reported, never hidden. */
+async function undo(what, fn) {
+  try { await fn(); } catch (e) { check(`cleanup: ${what}`, false, e.message); }
+}
+
+// An unexpected error is a failed run, reported like any other check.
+process.on("unhandledRejection", (e) => { check("the run completed without an unexpected error", false, String(e?.message ?? e)); finish(); });
+function finish() {
+  console.log(`\n${passes} passed, ${failures} failed`);
+  console.log(failures ? "END-TO-END CHECK FAILED" : "All end-to-end checks passed");
+  process.exit(failures ? 1 : 0);
+}
+
+// --- JWT helpers (for forged tokens; nothing here is printed) ----------------------
+const b64u = (v) => Buffer.from(typeof v === "string" ? v : JSON.stringify(v)).toString("base64url");
+const decode = (jwt) => JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString());
+const header = (jwt) => JSON.parse(Buffer.from(jwt.split(".")[0], "base64url").toString());
+const { privateKey: attackerKey, publicKey: attackerPub } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const rs256 = (h, p) => { const d = `${b64u(h)}.${b64u(p)}`; return keep(`${d}.${sign("sha256", Buffer.from(d), attackerKey).toString("base64url")}`); };
+
+// --- gateway -------------------------------------------------------------------
+/** Every direct gateway request, by trace ID, for the audit checks. */
+const gatewayCalls = [];
+async function gw(path, token, headers = {}) {
+  const res = await fetch(`${GATEWAY}${path}`, { headers: { ...(token !== undefined ? { authorization: token } : {}), ...headers }, signal: AbortSignal.timeout(10_000) });
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch { /* not JSON */ }
+  const trace = res.headers.get("x-trace-id");
+  gatewayCalls.push({ path, status: res.status, trace });
+  return { status: res.status, body, trace, www: res.headers.get("www-authenticate") };
+}
+const bearer = (t) => `Bearer ${t}`;
+/** A problem body without its per-request IDs, to compare responses for sameness. */
+const masked = (b) => JSON.stringify({ ...b, trace_id: undefined, request_id: undefined });
+
+// --- console (a browser-like client) --------------------------------------------
 function client() {
   let cookie = "";
-  async function call(method, path, body, origin = CONSOLE) {
+  async function call(method, path, body, origin = CONSOLE, extra = {}) {
     const res = await fetch(`${CONSOLE}${path}`, {
-      method,
-      redirect: "manual",
-      headers: {
-        ...(cookie ? { cookie } : {}),
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
-        ...(origin && method !== "GET" ? { origin } : {}),
-      },
+      method, redirect: "manual",
+      headers: { ...(cookie ? { cookie } : {}), ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(origin && method !== "GET" ? { origin } : {}), ...extra },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const set = res.headers.getSetCookie?.() ?? [];
     for (const c of set) if (c.startsWith("zp_console_sid=")) cookie = c.split(";")[0];
-    const text = await res.text();
+    const raw = await res.text();
     let json = null;
-    try { json = JSON.parse(text); } catch { /* not JSON */ }
-    return { status: res.status, body: json, raw: text, setCookie: set.join("; ") };
+    try { json = JSON.parse(raw); } catch { /* not JSON */ }
+    return { status: res.status, body: json, raw, setCookie: set.join("; ") };
   }
   return {
-    get: (p) => call("GET", p),
+    get: (p, extra) => call("GET", p, undefined, CONSOLE, extra),
     post: (p, b, origin) => call("POST", p, b, origin),
     put: (p, b) => call("PUT", p, b),
     login: (username, password = PASSWORD) => call("POST", "/auth/login", { username, password }),
   };
 }
-
-/** Runs SQL in the local Postgres container as zp_gateway (BC-01's runtime role), so RLS applies. */
-function psqlAsGateway(sql) {
-  return execFileSync("docker", ["compose", "-f", join(REPO, "deploy", "compose", "compose.yaml"), "exec", "-T",
-    "-e", `PGPASSWORD=${process.env.ZP_APP_PASSWORD ?? "local-dev-only-app"}`, "postgres",
-    "psql", "-X", "-q", "-A", "-t", "-h", "localhost", "-U", "zp_gateway", "-d", "zoikopay", "-v", "ON_ERROR_STOP=1", "-f", "-"],
-  { input: sql, encoding: "utf8" });
-}
-
 const merchantsOf = (res) => new Set(res.body?.data?.items?.map((p) => p.merchantId));
-const same = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
 
-// --- 0. The gateway is the real one ------------------------------------------
-const gw = await fetch(`${GATEWAY}/v1/principal`);
-check("gateway GET /v1/principal without a token is 401", gw.status === 401);
+// --- Postgres (local container) -----------------------------------------------
+function psql(user, sql) {
+  return execFileSync("docker", [...COMPOSE, "exec", "-T", "-e", `PGPASSWORD=${env.ZP_APP_PASSWORD ?? "local-dev-only-app"}`, "postgres",
+    "psql", "-X", "-q", "-A", "-t", "-h", "localhost", "-U", user, "-d", "zoikopay", "-v", "ON_ERROR_STOP=1", "-f", "-"],
+  { input: sql, encoding: "utf8" }).trim();
+}
+const asGateway = (sql) => psql("zp_gateway", sql); // BC-01's runtime role: RLS applies
+const asSuperuser = (sql) => psql("postgres", sql); // assertions only: reads every audit entry
+const reseed = () => asGateway(readFileSync(join(REPO, "scripts", "seed-local.sql"), "utf8"));
+const revokeAll = (subject) => asGateway(`BEGIN;
+SELECT set_config('zp.tenant_id', '${T.northwind}', true) \\g /dev/null
+UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = '${ISSUER}', revoked_by_subject = 'zp-e2e-revoker'
+WHERE issuer = '${ISSUER}' AND subject = '${subject}' AND revoked_at_utc IS NULL RETURNING persona;
+COMMIT;`);
 
-// --- 1. Sign-in form ------------------------------------------------------
+// =============================================================================
+section("1. Valid login: roles come only from merchant.memberships");
+const t = {
+  ops: await userTokens("merchant.ops"), owner: await userTokens("merchant.owner"), dev: await userTokens("merchant.dev"),
+  finance: await userTokens("merchant.finance"), superAdmin: await userTokens("super.admin"),
+};
+check("Keycloak issues a gateway-audience access token to the console client", [decode(t.ops.access_token).aud].flat().includes("zoikopay-gateway"));
+const opsPrincipal = await gw("/v1/principal", bearer(t.ops.access_token));
+const g0 = opsPrincipal.body?.grants ?? [];
+check("gateway: merchant.ops holds exactly MOPS on Northwind UK", opsPrincipal.status === 200 && opsPrincipal.body?.subject === SUB.ops
+  && g0.length === 1 && g0[0].persona === "mops" && g0[0].tenant_id === T.northwind && g0[0].merchant_id === M.northwindUk);
+const ownerPrincipal = await gw("/v1/principal", bearer(t.owner.access_token));
+check("gateway: merchant.owner holds tenant-wide MOWN on Northwind", ownerPrincipal.body?.grants?.length === 1
+  && ownerPrincipal.body.grants[0].persona === "mown" && ownerPrincipal.body.grants[0].merchant_id === undefined);
+const staffPrincipal = await gw("/v1/principal", bearer(t.superAdmin.access_token));
+check("gateway: super.admin signs in but holds no grant (no staff wildcard)", staffPrincipal.status === 200 && staffPrincipal.body?.grants?.length === 0);
+
 const bad = client();
-const wrong = await bad.login("merchant.ops", "wrong-password");
-check("wrong password is rejected by Keycloak", wrong.status === 401 && wrong.body?.code === "INVALID_CREDENTIALS");
-check("no session after a failed sign-in", (await bad.get("/api/v1/me")).status === 401);
-const unknown = await bad.login("no.such.user");
-check("unknown user gets the same answer", unknown.status === 401 && unknown.body?.code === "INVALID_CREDENTIALS");
+check("console: wrong password is rejected by Keycloak", (await bad.login("merchant.ops", "wrong-password")).body?.code === "INVALID_CREDENTIALS");
+check("console: unknown user gets the same answer", (await bad.login("no.such.user")).body?.code === "INVALID_CREDENTIALS");
+check("console: no session after a failed sign-in", (await bad.get("/api/v1/me")).status === 401);
 const csrf = await client().post("/auth/login", { username: "merchant.ops", password: PASSWORD }, "https://evil.example");
-check("sign-in posted from another site is refused", csrf.status === 403 && csrf.body?.code === "ORIGIN_REJECTED");
+check("console: sign-in posted from another site is refused", csrf.status === 403 && csrf.body?.code === "ORIGIN_REJECTED");
 
-// --- 2. Roles come from merchant.memberships through the gateway -------------
 const mops = client();
-const ok = await mops.login("merchant.ops");
-check("merchant.ops signs in with the console's own form", ok.status === 200, `HTTP ${ok.status}`);
-check("no token reaches the browser at sign-in", !/eyJ|refresh|access_token/i.test(ok.raw + ok.setCookie));
-const me = await mops.get("/api/v1/me");
-check("merchant.ops resolves to MOPS in TEST from their grant", me.body?.data?.personas?.join() === "MOPS" && me.body?.data?.environment === "TEST",
-  me.body?.data?.personas?.join());
-check("/me carries no token", !/eyJ/.test(me.raw));
-const pays = await mops.get("/api/v1/payments?pageSize=100");
-check("merchant.ops sees payments of Northwind UK only (merchant grant)", pays.status === 200 && same(merchantsOf(pays), new Set([NORTHWIND_UK])));
-check("data is labelled as mock data", pays.body?.meta?.source === "fixture");
-const first = pays.body?.data?.items?.[0]?.id;
-const detail = first && (await mops.get(`/api/v1/payments/${first}`));
-check("payment detail with evidence timeline loads", detail?.status === 200 && detail?.body?.data?.timeline?.length > 0);
-const scope = await mops.get("/api/v1/scope");
-check("legal entity comes from the covered merchant only (39.2)", scope.body?.data?.legalEntities?.map((e) => e.id).join() === "cell_uk_01");
-const kpis = await mops.get("/api/v1/overview/kpis?period=7d&currency=GBP");
-check("dashboard KPIs load", kpis.status === 200 && kpis.body?.data?.kpis?.length === 6);
-check("merchant.ops cannot switch to LIVE", (await mops.put("/api/v1/session/environment", { environment: "LIVE" })).status === 403);
-const forged = await fetch(`${CONSOLE}/api/v1/me`, { headers: { cookie: "", "x-zp-persona": "SUPER_ADMIN", "x-tenant-id": NORTHWIND, authorization: "Bearer forged" } });
-check("forged headers without a session get nothing", forged.status === 401);
+const opsLogin = await mops.login("merchant.ops");
+check("console: merchant.ops signs in with the console's own form", opsLogin.status === 200);
+check("console: no token reaches the browser at sign-in", !/eyJ|refresh|access_token/i.test(opsLogin.raw + opsLogin.setCookie));
+const opsMe = await mops.get("/api/v1/me");
+check("console: merchant.ops resolves to MOPS in TEST", opsMe.body?.data?.personas?.join() === "MOPS" && opsMe.body?.data?.environment === "TEST");
+check("console: /me carries no token", !/eyJ/.test(opsMe.raw));
+const opsPays = await mops.get("/api/v1/payments?pageSize=100");
+check("console: merchant.ops sees Northwind UK payments only", opsPays.status === 200 && same(merchantsOf(opsPays), new Set([M.northwindUk])));
+check("console: data is labelled as mock data", opsPays.body?.meta?.source === "fixture");
+check("console: legal entity comes from the covered merchant only (Q39 39.2)",
+  (await mops.get("/api/v1/scope")).body?.data?.legalEntities?.map((e) => e.id).join() === "cell_uk_01");
+check("console: merchant.ops cannot switch to LIVE", (await mops.put("/api/v1/session/environment", { environment: "LIVE" })).status === 403);
 
 const owner = client();
 await owner.login("merchant.owner");
-const ownerPays = await owner.get("/api/v1/payments?pageSize=100");
-check("merchant.owner (tenant-wide MOWN) sees both Northwind merchants and nothing else",
-  (await owner.get("/api/v1/me")).body?.data?.personas?.join() === "MOWN" && same(merchantsOf(ownerPays), new Set([NORTHWIND_UK, NORTHWIND_EU])));
+check("console: merchant.owner sees both Northwind merchants and nothing else",
+  same(merchantsOf(await owner.get("/api/v1/payments?pageSize=100")), new Set([M.northwindUk, M.northwindEu])));
 const access = await owner.get("/api/v1/access/members");
-check("Access screen refuses grant administration (39.6)", access.status === 503 && access.body?.code === "GRANT_ADMINISTRATION_UNAVAILABLE");
+check("console: Access screen refuses grant administration (Q39 39.6)", access.status === 503 && access.body?.code === "GRANT_ADMINISTRATION_UNAVAILABLE");
 
-const viewer = client();
+const viewer = client(); // exactly three console requests: sign-in, payments, audit (counted in section 7)
 await viewer.login("merchant.viewer");
-check("merchant.viewer (MVIEW, Alder) sees Alder only",
-  same(merchantsOf(await viewer.get("/api/v1/payments?pageSize=100")), new Set([ALDER_BOOKS, ALDER_TRAVEL])));
-const audit = await viewer.get("/api/v1/audit?limit=500");
-check("console audit chain verifies", audit.status === 200 && audit.body?.data?.verification?.valid === true);
+const viewerPays = await viewer.get("/api/v1/payments?pageSize=100");
+check("console: merchant.viewer sees Alder only", same(merchantsOf(viewerPays), new Set([M.alderBooks, M.alderTravel])));
+check("console: console audit chain verifies", (await viewer.get("/api/v1/audit?limit=500")).body?.data?.verification?.valid === true);
+const alderPayment = viewerPays.body?.data?.items?.[0]?.id;
 
-// --- 3. No staff wildcard: staff personas never come from memberships (36.1, 39.3) ---
-// A staff user's access is exactly their live rows in merchant.memberships,
-// which hold merchant personas only: normally none, so no access at all.
-const STAFF = { "super.admin": 1, "ops.agent": 2, "security.officer": 7, "iam.admin": 8, "fin.controller.a": 3 };
-const STAFF_PERSONAS = ["SUPER_ADMIN", "POR", "PSUP", "PRISK", "PCOMP", "PRECON", "PFIN", "PPSP", "PIAM", "PSEC", "PSRE"];
-for (const [username, n] of Object.entries(STAFF)) {
-  const sub = `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-  // The caller's own live grants, read the way the gateway reads them (own-grant RLS policy).
-  const live = psqlAsGateway(`BEGIN;
-SELECT set_config('zp.subject_issuer', '${ISSUER}', true), set_config('zp.subject', '${sub}', true) \\g /dev/null
-SELECT persona FROM merchant.memberships ORDER BY tenant_id, merchant_id NULLS FIRST, persona;
-COMMIT;`).trim().split("\n").filter(Boolean);
+for (const username of ["super.admin", "security.officer", "iam.admin"]) {
   const c = client();
   const login = await c.login(username);
   const m = (await c.get("/api/v1/me")).body?.data;
-  const staffOnly = [await c.get("/api/v1/platform/summary"), await c.get("/api/v1/exceptional-access")].every((r) => r.status === 403);
-  const noStaffPersona = !m?.personas?.some((p) => STAFF_PERSONAS.includes(p));
-  const matchesDb = live.length === 0
-    ? m?.hasAccess === false && m?.personas?.length === 0 && (await c.get("/api/v1/payments")).status === 403
-    : m?.personas?.join() === live[0];
-  check(`${username}: no staff persona, staff pages refused, access = their memberships rows`,
-    login.status === 200 && noStaffPersona && staffOnly && matchesDb, live.length ? `holds a real ${live[0]} grant in Postgres` : "no grant: no access");
+  const refused = [await c.get("/api/v1/payments"), await c.get("/api/v1/platform/summary"), await c.get("/api/v1/exceptional-access")].every((r) => r.status === 403);
+  check(`console: ${username} signs in with no access and no staff persona`, login.status === 200 && m?.hasAccess === false && m?.personas?.length === 0 && refused);
 }
 
-// --- 4. Revoke a real grant mid-session: denied on the next request ----------
-console.log("(waiting 61 s for the sign-in rate limit window)");
-await new Promise((r) => setTimeout(r, 61_000));
+// =============================================================================
+section("2. Bad, expired, wrong-audience and forged tokens get 401");
+const jwks = await (await fetch(`${ISSUER}/protocol/openid-connect/certs`)).json();
+const kcKey = jwks.keys.find((k) => k.use === "sig" && k.alg === "RS256");
+const real = t.ops.access_token;
+const [rh, , rs] = real.split(".");
+const ownerClaims = { ...decode(real), sub: SUB.owner };
+const service = await tokenRequest(ISSUER, { grant_type: "client_credentials", client_id: SERVICE_CLIENT.id, client_secret: SERVICE_CLIENT.secret });
+await admin("GET", "/roles"); // signs in to the local Keycloak admin console (realm master)
+const master = adminToken; // a real, validly signed token from another issuer
+check("the service-client token really lacks the gateway audience", ![decode(service.access_token).aud].flat().includes("zoikopay-gateway"));
+const badTokens = {
+  "no Authorization header": undefined,
+  "empty bearer": "Bearer ",
+  "wrong scheme": `Basic ${Buffer.from("merchant.ops:x").toString("base64")}`,
+  "not a JWT": "Bearer not-a-jwt",
+  "three garbage parts": "Bearer aaa.bbb.ccc",
+  "alg none": bearer(keep(`${b64u({ alg: "none", typ: "JWT" })}.${b64u(ownerClaims)}.`)),
+  "real signature, payload changed to another user": bearer(keep(`${rh}.${b64u(ownerClaims)}.${rs}`)),
+  "signed by an attacker key under Keycloak's key ID": bearer(rs256({ alg: "RS256", typ: "JWT", kid: kcKey.kid }, ownerClaims)),
+  "HS256 keyed with Keycloak's public key (algorithm confusion)": bearer(keep((() => {
+    const d = `${b64u({ alg: "HS256", typ: "JWT", kid: kcKey.kid })}.${b64u(ownerClaims)}`;
+    return `${d}.${createHmac("sha256", JSON.stringify(kcKey)).update(d).digest("base64url")}`;
+  })())),
+  "embedded attacker key (jwk header)": bearer(rs256({ alg: "RS256", typ: "JWT", kid: kcKey.kid, jwk: attackerPub.export({ format: "jwk" }) }, ownerClaims)),
+  "ID token instead of an access token": bearer(t.ops.id_token),
+  "refresh token": bearer(t.ops.refresh_token),
+  "wrong audience (service client token)": bearer(service.access_token),
+  "other issuer (realm master token)": bearer(master),
+};
+const unauthorized = [];
+for (const [name, auth] of Object.entries(badTokens)) {
+  const r = await gw(`/v1/merchants/${M.northwindUk}`, auth);
+  unauthorized.push(r);
+  check(`gateway: ${name} → 401`, r.status === 401 && r.body?.code === "authentication_required" && /^Bearer/.test(r.www ?? ""), `HTTP ${r.status}`);
+}
+check("gateway: every 401 has the same body (the reason is never revealed)", new Set(unauthorized.map((r) => masked(r.body))).size === 1);
+check("gateway: an unauthenticated caller cannot discover routes (401 on an unknown /v1 path)", (await gw("/v1/no_such_route", undefined)).status === 401);
+
+// Expired: a real token with a 5 s lifespan; the gateway allows 30 s clock leeway (ADR 0007).
+const consoleClient = (await admin("GET", `/clients?clientId=${CONSOLE_CLIENT.id}`))[0];
+const original = structuredClone(consoleClient);
+let shortLived;
+try {
+  await admin("PUT", `/clients/${consoleClient.id}`, { ...consoleClient, attributes: { ...consoleClient.attributes, "access.token.lifespan": "5" } });
+  shortLived = (await userTokens("merchant.ops")).access_token;
+} finally {
+  // An empty value removes the override, so the realm's own lifespan applies again.
+  await undo("token lifespan", () => admin("PUT", `/clients/${consoleClient.id}`, { ...original, attributes: { ...original.attributes, "access.token.lifespan": "" } }));
+}
+const shortClaims = decode(shortLived);
+check("a real short-lived token is issued (5 s)", shortClaims.exp - shortClaims.iat <= 5);
+const restored = decode((await userTokens("merchant.ops")).access_token);
+check("the console client's token lifespan is back to the realm's (300 s)", restored.exp - restored.iat >= 300, `${restored.exp - restored.iat} s`);
+check("gateway: that token works before it expires", (await gw(`/v1/merchants/${M.northwindUk}`, bearer(shortLived))).status === 200);
+const expiredAt = (shortClaims.exp + 31) * 1000;
+
+// =============================================================================
+section("3. Another tenant's data gets 404; a missing permission gets 403");
+const ops = bearer(t.ops.access_token);
+const own = await gw(`/v1/merchants/${M.northwindUk}`, ops);
+check("gateway: merchant.ops reads their own merchant (200)", own.status === 200 && own.body?.id === M.northwindUk);
+const notFound = {
+  "sibling merchant in the same tenant, no grant": await gw(`/v1/merchants/${M.northwindEu}`, ops),
+  "another tenant's merchant": await gw(`/v1/merchants/${M.alderBooks}`, ops),
+  "a merchant that does not exist": await gw(`/v1/merchants/${M.unknown}`, ops),
+  "a malformed ID": await gw("/v1/merchants/not-a-merchant", ops),
+};
+for (const [name, r] of Object.entries(notFound)) check(`gateway: ${name} → 404`, r.status === 404 && r.body?.code === "resource_not_found", `HTTP ${r.status}`);
+check("gateway: all those 404s are identical (existence is never revealed)", new Set(Object.values(notFound).map((r) => masked(r.body))).size === 1);
+const forbidden = await gw(`/v1/merchants/${M.northwindUk}`, bearer(t.dev.access_token));
+check("gateway: merchant.dev (MDEV, no MERCHANT.PROFILE.READ) on their own merchant → 403", forbidden.status === 403 && forbidden.body?.code === "permission_denied");
+check("gateway: merchant.owner (tenant-wide) reads the sibling merchant (200)", (await gw(`/v1/merchants/${M.northwindEu}`, bearer(t.owner.access_token))).status === 200);
+check("gateway: super.admin (no grant) → 404", (await gw(`/v1/merchants/${M.northwindUk}`, bearer(t.superAdmin.access_token))).status === 404);
+const mdev = client();
+await mdev.login("merchant.dev");
+check("console: merchant.dev has no payments permission → 403", (await mdev.get("/api/v1/payments")).status === 403);
+check("console: merchant.ops asking for another tenant's merchant → 404", (await mops.get(`/api/v1/overview/kpis?period=7d&currency=GBP&merchantId=${M.alderBooks}`)).status === 404);
+check("console: merchant.ops opening another tenant's payment → 404", !!alderPayment && (await mops.get(`/api/v1/payments/${alderPayment}`)).status === 404);
+
+// =============================================================================
+console.log("\n(waiting 61 s: the console allows 10 password checks a minute; the 5 s token also expires)");
+await sleep(Math.max(61_000, expiredAt - Date.now()));
+check("gateway: the expired token → 401", (await gw(`/v1/merchants/${M.northwindUk}`, bearer(shortLived))).status === 401);
+
+// =============================================================================
+section("4. Forged tenant and role claims, headers and metadata change nothing");
+const forgedHeaders = { "X-Tenant-Id": T.alder, "X-Zp-Tenant": T.alder, "X-Zp-Persona": "MOWN", "X-Role": "SUPER_ADMIN", "X-Zp-Subject": SUB.owner, "X-Forwarded-User": "super.admin" };
+const hdrAlder = await gw(`/v1/merchants/${M.alderBooks}?tenant_id=${T.alder}&persona=MOWN&subject=${SUB.owner}`, ops, forgedHeaders);
+check("gateway: forged headers and query values do not open another tenant (404)", hdrAlder.status === 404);
+const hdrPrincipal = await gw(`/v1/principal?tenant_id=${T.alder}`, ops, forgedHeaders);
+check("gateway: forged headers do not change the principal", hdrPrincipal.body?.grants?.length === 1 && hdrPrincipal.body.grants[0].persona === "mops");
+const hdrConsole = await mops.get("/api/v1/me", forgedHeaders);
+check("console: forged headers on a real session do not change the role", hdrConsole.body?.data?.personas?.join() === "MOPS");
+const noSession = await fetch(`${CONSOLE}/api/v1/me`, { headers: { ...forgedHeaders, authorization: ops } });
+check("console: a bearer token and forged headers without a session get 401", noSession.status === 401);
+
+// Make Keycloak itself put forged claims in real, validly signed tokens: realm
+// roles, hard-coded tenant and persona claims, and user metadata.
+const roleNames = ["SUPER_ADMIN", "MOWN"];
+let forgedOps;
+let forgedSupport;
+try {
+  for (const name of roleNames) await admin("POST", "/roles", { name, description: "e2e forged role (removed after the run)" });
+  const roles = await Promise.all(roleNames.map((n) => admin("GET", `/roles/${n}`)));
+  for (const s of [SUB.ops, SUB.support]) await admin("POST", `/users/${s}/role-mappings/realm`, roles);
+  const claim = (name, value, type = "String") => ({ name: `e2e-forged-${name}`, protocol: "openid-connect", protocolMapper: "oidc-hardcoded-claim-mapper",
+    config: { "claim.name": name, "claim.value": value, "jsonType.label": type, "access.token.claim": "true", "id.token.claim": "true", "userinfo.token.claim": "true" } });
+  for (const m of [claim("tenant_id", T.alder), claim("merchant_id", M.alderBooks), claim("persona", "MOWN"),
+    claim("user_metadata", JSON.stringify({ tenant_id: T.alder, role: "SUPER_ADMIN" }), "JSON")]) {
+    await admin("POST", `/clients/${consoleClient.id}/protocol-mappers/models`, m);
+  }
+  forgedOps = (await userTokens("merchant.ops")).access_token;
+  forgedSupport = (await userTokens("support.agent")).access_token;
+  const c = decode(forgedOps);
+  check("the forged claims really are in Keycloak-signed tokens", c.tenant_id === T.alder && c.persona === "MOWN"
+    && c.user_metadata?.role === "SUPER_ADMIN" && c.realm_access?.roles?.includes("SUPER_ADMIN") && header(forgedOps).kid === kcKey.kid);
+
+  const p1 = await gw("/v1/principal", bearer(forgedOps));
+  check("gateway: merchant.ops with forged claims still holds only MOPS on Northwind UK", p1.body?.grants?.length === 1 && p1.body.grants[0].persona === "mops");
+  check("gateway: forged tenant claim does not open that tenant (404)", (await gw(`/v1/merchants/${M.alderBooks}`, bearer(forgedOps))).status === 404);
+  check("gateway: support.agent with SUPER_ADMIN/MOWN claims holds nothing", (await gw("/v1/principal", bearer(forgedSupport))).body?.grants?.length === 0);
+  check("gateway: support.agent with forged claims → 404 on a Northwind merchant", (await gw(`/v1/merchants/${M.northwindUk}`, bearer(forgedSupport))).status === 404);
+  const sup = client();
+  await sup.login("support.agent");
+  const supMe = (await sup.get("/api/v1/me")).body?.data;
+  check("console: support.agent signed in with forged claims has no access", supMe?.hasAccess === false && supMe?.personas?.length === 0);
+  const mops2 = client();
+  await mops2.login("merchant.ops");
+  check("console: merchant.ops signed in with forged claims is still MOPS on Northwind UK only",
+    (await mops2.get("/api/v1/me")).body?.data?.personas?.join() === "MOPS" && same(merchantsOf(await mops2.get("/api/v1/payments?pageSize=100")), new Set([M.northwindUk])));
+} catch (e) {
+  check("forged-claims setup completed", false, e.message);
+} finally {
+  // Remove every forged mapper by name, even if setup stopped half way.
+  await undo("forged claim mappers", async () => {
+    for (const m of await admin("GET", `/clients/${consoleClient.id}/protocol-mappers/models`)) {
+      if (m.name.startsWith("e2e-forged-")) await admin("DELETE", `/clients/${consoleClient.id}/protocol-mappers/models/${m.id}`);
+    }
+  });
+  await undo("forged realm roles", async () => { for (const name of roleNames) await admin("DELETE", `/roles/${name}`); });
+}
+const after = decode((await userTokens("merchant.ops")).access_token);
+check("the realm is back as imported (forged claims and roles removed)", after.tenant_id === undefined && !after.realm_access?.roles?.includes("SUPER_ADMIN"));
+
+// =============================================================================
+section("5. A revoked grant is denied on the next request");
 const fin = client();
 await fin.login("merchant.finance");
-const before = await fin.get("/api/v1/payments?pageSize=100");
-check("merchant.finance (MFIN) sees Northwind payments before revocation", before.status === 200 && merchantsOf(before).size === 2);
-const revoked = psqlAsGateway(`BEGIN;
-SELECT set_config('zp.tenant_id', '${NORTHWIND}', true) \\g /dev/null
-UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = '${ISSUER}', revoked_by_subject = 'zp-e2e-revoker'
-WHERE issuer = '${ISSUER}' AND subject = '${MERCHANT_FINANCE_SUB}' AND revoked_at_utc IS NULL RETURNING persona;
-COMMIT;`).trim();
-check("the MFIN grant is revoked in merchant.memberships", revoked === "MFIN", revoked);
-const after = await fin.get("/api/v1/payments");
-const afterMe = await fin.get("/api/v1/me");
-check("same session, next request: payments denied", after.status === 403);
-check("same session, next request: no access left", afterMe.status === 200 && afterMe.body?.data?.hasAccess === false);
-psqlAsGateway(readFileSync(join(REPO, "scripts", "seed-local.sql"), "utf8"));
-const restored = await fin.get("/api/v1/payments?pageSize=100");
-check("a new grant (seed re-run) restores access on the next request", restored.status === 200 && merchantsOf(restored).size === 2);
+const finToken = bearer(t.finance.access_token);
+check("before: merchant.finance reads a Northwind merchant through the gateway", (await gw(`/v1/merchants/${M.northwindUk}`, finToken)).status === 200);
+check("before: merchant.finance sees Northwind payments in the console", (await fin.get("/api/v1/payments?pageSize=100")).status === 200);
+check("the MFIN grant is revoked in merchant.memberships", revokeAll(SUB.finance) === "MFIN");
+check("gateway, same token, next request → 404", (await gw(`/v1/merchants/${M.northwindUk}`, finToken)).status === 404);
+check("gateway, same token: the principal lists no grant", (await gw("/v1/principal", finToken)).body?.grants?.length === 0);
+check("console, same session, next request: payments denied", (await fin.get("/api/v1/payments")).status === 403);
+check("console, same session: no access left", (await fin.get("/api/v1/me")).body?.data?.hasAccess === false);
+reseed();
+check("a new grant restores access on the next request (gateway and console)",
+  (await gw(`/v1/merchants/${M.northwindUk}`, finToken)).status === 200 && (await fin.get("/api/v1/payments")).status === 200);
 
-// --- 5. Screens and step-up with real password re-entry ----------------------
+// Screens and step-up with real password re-entry.
 const refunds = await mops.get("/api/v1/screens/ZP-BRW-008");
-check("merchant.ops opens Refunds (ZP-BRW-008), own merchant's records only",
-  refunds.status === 200 && (refunds.body?.data?.items ?? []).every((r) => r.merchantId === NORTHWIND_UK));
-check("merchant.ops cannot open Payouts (ZP-BRW-010)", [403, 404].includes((await mops.get("/api/v1/screens/ZP-BRW-010")).status));
-check("wrong password at re-entry is refused by Keycloak", (await mops.post("/auth/reauth", { password: "wrong" })).status === 401);
-check("password re-entry succeeds through Keycloak", (await mops.post("/auth/reauth", { password: PASSWORD })).status === 200);
-const sb = await mops.post("/api/v1/sandbox/payment-intents", { merchantId: NORTHWIND_UK, amount_minor: "1999", currency: "GBP", capture_mode: "automatic", order_ref: "E2E-1" });
-check("sandbox intent without Idempotency-Key is refused", sb.status === 400);
+check("console: merchant.ops opens Refunds (ZP-BRW-008), own merchant's records only", refunds.status === 200 && (refunds.body?.data?.items ?? []).every((r) => r.merchantId === M.northwindUk));
+check("console: merchant.ops cannot open Payouts (ZP-BRW-010)", [403, 404].includes((await mops.get("/api/v1/screens/ZP-BRW-010")).status));
+check("console: wrong password at re-entry is refused by Keycloak", (await mops.post("/auth/reauth", { password: "wrong" })).status === 401);
+check("console: password re-entry succeeds through Keycloak", (await mops.post("/auth/reauth", { password: PASSWORD })).status === 200);
 
-// --- 6. Create account and change password (real Keycloak) --------------------
-console.log("(waiting 61 s for the sign-in rate limit window)");
-await new Promise((r) => setTimeout(r, 61_000));
+// =============================================================================
+console.log("\n(waiting 61 s for the console's sign-in rate limit)");
+await sleep(61_000);
+section("6. Account creation and password change (real Keycloak)");
 const uname = `e2e.user${Date.now().toString().slice(-6)}`;
-const reg = await client().post("/auth/register", { username: uname, firstName: "E2E", lastName: "User", email: `${uname}@example.test`, password: "First#Pass1" });
-check("create account succeeds in Keycloak", reg.status === 201, uname);
-const weak = await client().post("/auth/register", { username: `${uname}x`, firstName: "E2E", lastName: "User", email: `${uname}x@example.test`, password: "weak" });
-check("weak password is refused", weak.status === 400);
+check("create account succeeds", (await client().post("/auth/register", { username: uname, firstName: "E2E", lastName: "User", email: `${uname}@example.test`, password: "First#Pass1" })).status === 201, uname);
+check("weak password is refused", (await client().post("/auth/register", { username: `${uname}x`, firstName: "E2E", lastName: "User", email: `${uname}x@example.test`, password: "weak" })).status === 400);
 const fresh = client();
 check("new account can sign in", (await fresh.login(uname, "First#Pass1")).status === 200);
-const freshMe = await fresh.get("/api/v1/me");
-check("new account has no grant, so no access (deny by default)", freshMe.body?.data?.hasAccess === false && (await fresh.get("/api/v1/overview/kpis")).status === 403);
-const cp = await client().post("/auth/change-password", { username: uname, currentPassword: "First#Pass1", newPassword: "Second#Pass2" });
-check("change password succeeds", cp.status === 200);
+check("new account has no grant, so no access (deny by default)", (await fresh.get("/api/v1/me")).body?.data?.hasAccess === false && (await fresh.get("/api/v1/overview/kpis")).status === 403);
+check("change password succeeds", (await client().post("/auth/change-password", { username: uname, currentPassword: "First#Pass1", newPassword: "Second#Pass2" })).status === 200);
 check("old password no longer works", (await client().login(uname, "First#Pass1")).status === 401);
 check("new password works", (await client().login(uname, "Second#Pass2")).status === 200);
-
-// --- 7. Sign-out ------------------------------------------------------------
 const out = await mops.post("/auth/logout", {});
-check("sign-out succeeds", out.status === 200);
-check("session is gone after sign-out", (await mops.get("/api/v1/me")).status === 401);
+check("sign-out succeeds and ends the session", out.status === 200 && (await mops.get("/api/v1/me")).status === 401);
 
-console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll end-to-end checks passed");
-process.exit(failures ? 1 : 0);
+// =============================================================================
+section("7. Every request leaves an audit entry");
+await sleep(500);
+const rows = JSON.parse(asSuperuser(`SELECT coalesce(json_agg(json_build_object('trace', trace_id, 'action', action, 'outcome', outcome,
+  'subject', actor_subject, 'tenant', tenant_id, 'status', http_status, 'reason', reason)), '[]') FROM governance.audit_events;`));
+const byTrace = new Map();
+for (const r of rows) byTrace.set(r.trace, [...(byTrace.get(r.trace) ?? []), r]);
+const traced = gatewayCalls.filter((c) => c.trace);
+check(`gateway: every one of the ${gatewayCalls.length} direct requests carried a trace ID`, traced.length === gatewayCalls.length);
+const missing = traced.filter((c) => byTrace.get(c.trace)?.length !== 1);
+check(`audit: each of those requests has exactly one entry`, missing.length === 0, missing.length ? `${missing.length} without exactly one` : `${traced.length} entries`);
+const entries = traced.map((c) => ({ c, e: byTrace.get(c.trace)?.[0] })).filter((x) => x.e);
+check("audit: each entry's status matches the response", entries.every(({ c, e }) => e.status === c.status));
+const outcomeOf = (s) => (s < 400 ? "ALLOWED" : s >= 500 ? "FAILED" : "DENIED");
+check("audit: outcomes are ALLOWED / DENIED / FAILED by status", entries.every(({ c, e }) => e.outcome === outcomeOf(c.status)));
+check("audit: a 401 never records an actor (rejected claims are not trusted)", entries.filter(({ c }) => c.status === 401).every(({ e }) => e.subject === null));
+check("audit: a 404 never records a tenant (no existence leak)", entries.filter(({ c }) => c.status === 404).every(({ e }) => e.tenant === null));
+check("audit: a 200 or 403 on a merchant records the caller's own tenant",
+  entries.filter(({ c }) => c.path.startsWith("/v1/merchants/") && [200, 403].includes(c.status)).every(({ e }) => e.tenant === T.northwind));
+const viewerReads = rows.filter((r) => r.action === "getPrincipal" && r.subject === SUB.viewer);
+check("audit: every console request reads grants through the gateway and is audited (merchant.viewer: 3 requests, 3 entries)",
+  viewerReads.length === 3 && viewerReads.every((r) => r.outcome === "ALLOWED"), `${viewerReads.length} entries`);
+const auditText = asSuperuser("SELECT coalesce(string_agg(row_to_json(a)::text, E'\\n'), '') FROM governance.audit_events a;");
+check("audit: no entry contains a token", !auditText.includes("eyJ") && [...secrets].every((s) => !auditText.includes(s)));
+
+// =============================================================================
+section("8. No token in any log");
+const tokenParts = [...secrets].flatMap((s) => [s, ...s.split(".").filter((p) => p.length >= 40)]);
+const tokenIn = (text) => tokenParts.find((p) => text.includes(p));
+if (!LOG_DIR) {
+  skip("gateway, console backend and frontend logs", "set E2E_LOG_DIR, or run `make e2e-auth`");
+} else {
+  for (const name of ["gateway.log", "backend.log", "frontend.log"]) {
+    const file = join(LOG_DIR, name);
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    const lines = text.split("\n").filter(Boolean).length;
+    check(`${name}: not empty (${lines} lines), no token, no "eyJ", no password`,
+      lines > 0 && !tokenIn(text) && !text.includes("eyJ") && !text.includes(PASSWORD) && !text.includes("Second#Pass2"));
+  }
+  const gwLog = readFileSync(join(LOG_DIR, "gateway.log"), "utf8");
+  check("gateway.log has one line per direct request (the scan saw real traffic)", traced.every((c) => gwLog.includes(c.trace)));
+}
+const since = env.E2E_STARTED_AT;
+for (const svc of ["keycloak", "postgres"]) {
+  const text = execFileSync("docker", [...COMPOSE, "logs", "--no-color", ...(since ? ["--since", since] : []), svc], { encoding: "utf8", maxBuffer: 64 << 20 });
+  check(`${svc} container log: no token from this run`, !tokenIn(text));
+}
+
+finish();

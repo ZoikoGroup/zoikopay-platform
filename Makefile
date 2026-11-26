@@ -73,6 +73,10 @@ seed-local: ## Local stack only: synthetic tenants, merchants and grants for the
 	$(COMPOSE) exec -T -e PGPASSWORD="$(ZP_APP_PASSWORD)" postgres \
 	  psql -X -q -h localhost -U zp_gateway -d zoikopay -v ON_ERROR_STOP=1 -f - < scripts/seed-local.sql
 
+.PHONY: e2e-auth
+e2e-auth: ## Authentication end-to-end check from a CLEAN local stack (deletes local data; synthetic only). See docs/runbooks/local-auth-e2e.md
+	bash scripts/e2e-auth.sh
+
 .PHONY: migrate-verify
 migrate-verify: ## Check migration files offline (names, order, expand-contract annotations)
 	go run ./cmd/migrate verify -dir db/migrations
