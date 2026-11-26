@@ -51,9 +51,14 @@ type grant struct {
 	maker, checker db.Subject // default maker and checker
 	effectiveFrom  time.Time  // default grantTime
 	expiresAt      time.Time  // default grantTime + 48h
+	// viaRuntime writes as zp_gateway instead of the provisioning role. The
+	// runtime role may create grants only from approved access requests (Q40),
+	// so this is for tests that expect a refusal.
+	viaRuntime bool
 }
 
-// insertGrant writes g under a and returns the membership's internal ID.
+// insertGrant writes g under a and returns the membership's internal ID. It
+// writes as the provisioning role (f.prov) unless g.viaRuntime.
 func (f *fixture) insertGrant(a access, g grant) (string, error) {
 	if g.environment == "" {
 		g.environment = "TEST"
@@ -75,7 +80,11 @@ func (f *fixture) insertGrant(a access, g grant) (string, error) {
 		merchantID = g.merchant
 	}
 	id := ids.NewInternal()
-	_, err := f.execAs(f.gw, a, insertMembership, id, g.member.Issuer, g.member.Subject, g.tenant, merchantID,
+	pool := f.prov
+	if g.viaRuntime {
+		pool = f.gw
+	}
+	_, err := f.execAs(pool, a, insertMembership, id, g.member.Issuer, g.member.Subject, g.tenant, merchantID,
 		g.environment, g.persona, g.maker.Issuer, g.maker.Subject, g.checker.Issuer, g.checker.Subject, grantTime,
 		g.effectiveFrom, g.expiresAt)
 	return id, err
@@ -156,21 +165,23 @@ func TestMemberships(t *testing.T) {
 	})
 
 	t.Run("the subject context cannot grant or revoke", func(t *testing.T) {
-		_, err := f.insertGrant(asSubject(alice), grant{member: alice, tenant: tenantA, persona: "MDEV"})
+		_, err := f.insertGrant(asSubject(alice), grant{member: alice, tenant: tenantA, persona: "MDEV", viaRuntime: true})
 		wantState(t, "grant with only a subject context", err, insufficientPrivilege)
 		n, err := f.execAs(f.gw, asSubject(carol), revokeMembership, carolGrant, grantTime.Add(time.Minute), carol.Issuer, carol.Subject)
 		if err != nil || n != 0 {
 			t.Errorf("revoke with only a subject context: %d rows, %v; want 0 rows", n, err)
 		}
-		_, err = f.insertGrant(asBoth(tenantA, alice), grant{member: alice, tenant: tenantB, persona: "MDEV"})
+		_, err = f.insertGrant(asBoth(tenantA, alice), grant{member: alice, tenant: tenantB, persona: "MDEV", viaRuntime: true})
 		wantState(t, "grant into tenant B from tenant A's context", err, insufficientPrivilege)
 	})
 
+	// Revocations below are by the provisioning role; the runtime role's
+	// revocation rules are in TestGrantAdministration.
 	t.Run("revoked grants leave the subject lookup but stay in the tenant's history", func(t *testing.T) {
 		if n := f.countAs(t, f.gw, asSubject(carol), countMemberships); n != 1 {
 			t.Fatalf("carol sees %d memberships before revocation, want 1", n)
 		}
-		n, err := f.exec(f.gw, tenantA, revokeMembership, carolGrant, grantTime.Add(time.Hour), checker.Issuer, checker.Subject)
+		n, err := f.exec(f.prov, tenantA, revokeMembership, carolGrant, grantTime.Add(time.Hour), checker.Issuer, checker.Subject)
 		if err != nil || n != 1 {
 			t.Fatalf("revoke carol: %d rows, %v", n, err)
 		}
@@ -185,17 +196,17 @@ func TestMemberships(t *testing.T) {
 
 	t.Run("revocation is final and complete", func(t *testing.T) {
 		later := grantTime.Add(2 * time.Hour)
-		_, err := f.exec(f.gw, tenantA, revokeMembership, carolGrant, later, checker.Issuer, checker.Subject)
+		_, err := f.exec(f.prov, tenantA, revokeMembership, carolGrant, later, checker.Issuer, checker.Subject)
 		wantState(t, "revoke an already revoked grant again", err, restrictViolation)
-		_, err = f.exec(f.gw, tenantA, `UPDATE merchant.memberships SET revoked_at_utc = NULL, revoked_by_issuer = NULL, revoked_by_subject = NULL WHERE id = $1::uuid`, carolGrant)
+		_, err = f.exec(f.prov, tenantA, `UPDATE merchant.memberships SET revoked_at_utc = NULL, revoked_by_issuer = NULL, revoked_by_subject = NULL WHERE id = $1::uuid`, carolGrant)
 		wantState(t, "un-revoke", err, restrictViolation)
 
 		active := f.mustGrant(t, grant{member: carol, tenant: tenantA, merchant: merA1, persona: "MVIEW"})
-		_, err = f.exec(f.gw, tenantA, `UPDATE merchant.memberships SET revoked_at_utc = $2 WHERE id = $1::uuid`, active, later)
+		_, err = f.exec(f.prov, tenantA, `UPDATE merchant.memberships SET revoked_at_utc = $2 WHERE id = $1::uuid`, active, later)
 		wantState(t, "revocation without who revoked", err, checkViolation)
-		_, err = f.exec(f.gw, tenantA, revokeMembership, active, grantTime.Add(-time.Hour), checker.Issuer, checker.Subject)
+		_, err = f.exec(f.prov, tenantA, revokeMembership, active, grantTime.Add(-time.Hour), checker.Issuer, checker.Subject)
 		wantState(t, "revocation dated before the grant", err, checkViolation)
-		_, err = f.exec(f.gw, tenantA, revokeMembership, active, later, "", "")
+		_, err = f.exec(f.prov, tenantA, revokeMembership, active, later, "", "")
 		wantState(t, "revocation by an empty identity", err, checkViolation)
 	})
 

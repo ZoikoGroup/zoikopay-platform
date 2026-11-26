@@ -120,7 +120,7 @@ func TestGetPrincipal(t *testing.T) {
 		liveOnly := "00000000-0000-4000-8000-0000000000c1"
 		merLive := g.merchant(tenantA, "LIVE", "A Live")
 		at := time.Now().UTC().Add(-time.Hour)
-		g.inTenant(tenantA, `INSERT INTO merchant.memberships (id, issuer, subject, tenant_id, merchant_id, environment, persona,
+		g.provision(`INSERT INTO merchant.memberships (id, issuer, subject, tenant_id, merchant_id, environment, persona,
 			granted_by_issuer, granted_by_subject, approved_by_issuer, approved_by_subject, granted_at_utc, effective_from_utc, expires_at_utc)
 			VALUES ($1::uuid, $2, $3, $4, $5, 'LIVE', 'MOPS', $2, $6, $2, $7, $8, $8, $9)`,
 			ids.NewInternal(), issuer, liveOnly, tenantA, merLive, makerID, checkID, at, at.Add(48*time.Hour))
@@ -134,7 +134,7 @@ func TestGetPrincipal(t *testing.T) {
 		if p := wantPrincipal(t, "before", g.get("/v1/principal", tok), ops); len(p.Grants) != 1 || p.Grants[0].Persona != "mops" {
 			t.Fatalf("before revocation: grants %+v; want the MOPS grant", p.Grants)
 		}
-		g.inTenant(tenantA, `UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = $2, revoked_by_subject = $3 WHERE id = $1::uuid`,
+		g.provision(`UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = $2, revoked_by_subject = $3 WHERE id = $1::uuid`,
 			opsGrant, issuer, checkID)
 		if p := wantPrincipal(t, "after", g.get("/v1/principal", tok), ops); len(p.Grants) != 0 {
 			t.Errorf("after revocation, same token: grants %+v; want none", p.Grants)

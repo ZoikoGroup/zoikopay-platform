@@ -8,12 +8,63 @@ import (
 	"time"
 )
 
+type MerchantAccessRequest struct {
+	ID                 string
+	AccessRequestID    string
+	TenantID           string
+	Environment        string
+	MemberIssuer       string
+	MemberSubject      string
+	MerchantID         *string
+	Persona            string
+	EffectiveFromUtc   time.Time
+	ExpiresAtUtc       time.Time
+	Purpose            string
+	RequestedByIssuer  string
+	RequestedBySubject string
+	RequestedAtUtc     time.Time
+	DecisionDueAtUtc   time.Time
+	Status             string
+	DecidedByIssuer    *string
+	DecidedBySubject   *string
+	DecidedAtUtc       *time.Time
+	DecisionReason     *string
+	Version            int64
+}
+
 type MerchantEventInbox struct {
 	ConsumerID     string
 	EventID        string
 	EventType      string
 	TenantID       string
 	ProcessedAtUtc time.Time
+}
+
+type MerchantGrantEvent struct {
+	ID               string
+	TenantID         string
+	Environment      string
+	EventType        string
+	ActorIssuer      string
+	ActorSubject     string
+	MemberIssuer     *string
+	MemberSubject    *string
+	MakerIssuer      *string
+	MakerSubject     *string
+	ApproverIssuer   *string
+	ApproverSubject  *string
+	InvitationID     *string
+	AccessRequestID  *string
+	MembershipID     *string
+	Persona          *string
+	MerchantID       *string
+	EffectiveFromUtc *time.Time
+	ExpiresAtUtc     *time.Time
+	Purpose          *string
+	Reason           *string
+	PriorVersion     *int64
+	NewVersion       *int64
+	OccurredAtUtc    time.Time
 }
 
 type MerchantIdempotencyRegistry struct {
@@ -39,6 +90,21 @@ type MerchantIdempotencyRegistry struct {
 	LastSeenAtUtc      time.Time
 }
 
+type MerchantInvitation struct {
+	ID                string
+	InvitationID      string
+	TenantID          string
+	Environment       string
+	TokenHash         []byte
+	InvitedByIssuer   string
+	InvitedBySubject  string
+	CreatedAtUtc      time.Time
+	ExpiresAtUtc      time.Time
+	AcceptedByIssuer  *string
+	AcceptedBySubject *string
+	AcceptedAtUtc     *time.Time
+}
+
 type MerchantMembership struct {
 	ID                string
 	Issuer            string
@@ -57,6 +123,9 @@ type MerchantMembership struct {
 	RevokedAtUtc      *time.Time
 	EffectiveFromUtc  time.Time
 	ExpiresAtUtc      time.Time
+	MembershipID      string
+	AccessRequestID   *string
+	RevocationReason  *string
 }
 
 type MerchantMerchant struct {

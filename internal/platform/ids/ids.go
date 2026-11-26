@@ -36,6 +36,10 @@ const (
 	Merchant      Prefix = "mer_"
 	// Tenant is proposed, not yet frozen: first built by BC-01 (ADR 0001 §6, Q15).
 	Tenant Prefix = "ten_"
+	// Grant administration (BC-01, OPEN_QUESTIONS Q40). Proposed, not yet frozen.
+	Invitation    Prefix = "inv_"
+	AccessRequest Prefix = "acr_"
+	Membership    Prefix = "mbr_"
 )
 
 const suffixLen = 32

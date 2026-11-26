@@ -58,7 +58,7 @@ func TestGrantSource(t *testing.T) {
 	f.mustGrant(t, grant{member: alice, tenant: tenantA, persona: "MOWN"})
 	f.mustGrant(t, grant{member: alice, tenant: tenantB, merchant: merB1, persona: "MVIEW"})
 	revoked := f.mustGrant(t, grant{member: alice, tenant: tenantA, persona: "MFIN"})
-	if _, err := f.exec(f.gw, tenantA, revokeMembership, revoked, grantTime.Add(time.Minute), checker.Issuer, checker.Subject); err != nil {
+	if _, err := f.exec(f.prov, tenantA, revokeMembership, revoked, grantTime.Add(time.Minute), checker.Issuer, checker.Subject); err != nil {
 		t.Fatal(err)
 	}
 	f.mustGrant(t, grant{member: alice, tenant: tenantA, persona: "MDEV", expiresAt: grantTime.Add(30 * time.Minute)}) // expired 30m ago
@@ -114,7 +114,7 @@ func TestGrantSource(t *testing.T) {
 	})
 
 	t.Run("every grant has a required, ordered validity window", func(t *testing.T) {
-		_, err := f.exec(f.gw, tenantA, `INSERT INTO merchant.memberships
+		_, err := f.exec(f.prov, tenantA, `INSERT INTO merchant.memberships
 			(id, issuer, subject, tenant_id, environment, persona, granted_by_issuer, granted_by_subject,
 			 approved_by_issuer, approved_by_subject, granted_at_utc)
 			VALUES (uuidv7(), $1, $2, $3, 'TEST', 'MVIEW', $4, $5, $6, $7, now())`,
@@ -227,7 +227,7 @@ func TestTokenToPrincipal(t *testing.T) {
 	})
 
 	t.Run("revoking a grant takes effect while the token is still valid", func(t *testing.T) {
-		if _, err := f.exec(f.gw, tenantA, revokeMembership, ownerA, time.Now().UTC(), checker.Issuer, checker.Subject); err != nil {
+		if _, err := f.exec(f.prov, tenantA, revokeMembership, ownerA, time.Now().UTC(), checker.Issuer, checker.Subject); err != nil {
 			t.Fatal(err)
 		}
 		p, err := principalFor()

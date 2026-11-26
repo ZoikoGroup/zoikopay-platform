@@ -109,6 +109,16 @@ func (g *gateway) inTenant(tenant string, sql string, args ...any) {
 	}
 }
 
+// provision writes grant fixtures as the provisioning role (the database
+// superuser, standing in for 05-03 tenant provisioning): the runtime role may
+// create and revoke grants only through grant administration (Q40).
+func (g *gateway) provision(sql string, args ...any) {
+	g.t.Helper()
+	if _, err := g.su.Exec(g.t.Context(), sql, args...); err != nil {
+		g.t.Fatalf("provision: %v", err)
+	}
+}
+
 func (g *gateway) tenant(name string) string {
 	id := ids.NewPublic(ids.Tenant)
 	g.inTenant(id, `INSERT INTO merchant.tenants VALUES ($1::uuid, $2, $3, now(), now())`, ids.NewInternal(), id, name)
@@ -129,7 +139,7 @@ func (g *gateway) grant(sub, tenant, merchant, persona string) string {
 		m = merchant
 	}
 	at := time.Now().UTC().Add(-time.Hour)
-	g.inTenant(tenant, `INSERT INTO merchant.memberships (id, issuer, subject, tenant_id, merchant_id, environment, persona,
+	g.provision(`INSERT INTO merchant.memberships (id, issuer, subject, tenant_id, merchant_id, environment, persona,
 		granted_by_issuer, granted_by_subject, approved_by_issuer, approved_by_subject, granted_at_utc, effective_from_utc, expires_at_utc)
 		VALUES ($1::uuid, $2, $3, $4, $5, 'TEST', $6, $2, $7, $2, $8, $9, $9, $10)`,
 		id, issuer, sub, tenant, m, persona, makerID, checkID, at, at.Add(48*time.Hour))
@@ -337,7 +347,7 @@ func TestGetMerchant(t *testing.T) {
 	t.Run("a revoked grant denies on the next request while the token is valid", func(t *testing.T) {
 		tok := g.token(revokee)
 		wantMerchant(t, "before revocation", g.get(path(merA1), tok), merA1, "A One")
-		g.inTenant(tenantA, `UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = $2, revoked_by_subject = $3 WHERE id = $1::uuid`,
+		g.provision(`UPDATE merchant.memberships SET revoked_at_utc = now(), revoked_by_issuer = $2, revoked_by_subject = $3 WHERE id = $1::uuid`,
 			revokeeGrant, issuer, checkID)
 		wantProblem(t, "after revocation", g.get(path(merA1), tok), http.StatusNotFound, "resource_not_found")
 	})

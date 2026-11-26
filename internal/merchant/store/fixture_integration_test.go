@@ -36,6 +36,10 @@ type fixture struct {
 	pg  *dbtest.Instance
 	gw  *pgxpool.Pool // zp_gateway: BC-01's runtime role (deployable D1)
 	mig *pgxpool.Pool // zp_migrator: owns the schema
+	// prov stands in for tenant provisioning (05-03, not built): the database
+	// superuser, the only role that may create owner grants or grants without
+	// an approved access request (OPEN_QUESTIONS Q40). Test fixtures only.
+	prov *pgxpool.Pool
 }
 
 // setup applies the real db/migrations through the approved runner, exactly
@@ -48,7 +52,7 @@ func setup(t *testing.T) *fixture {
 	if _, err := r.Up(ctx); err != nil {
 		t.Fatalf("apply real migrations: %v", err)
 	}
-	return &fixture{ctx: ctx, pg: pg, gw: pg.Pool(t, "zp_gateway"), mig: pg.Pool(t, "zp_migrator")}
+	return &fixture{ctx: ctx, pg: pg, gw: pg.Pool(t, "zp_gateway"), mig: pg.Pool(t, "zp_migrator"), prov: pg.Pool(t, "postgres")}
 }
 
 // scope is a full tenant context for db.InTenantTx. Cell and legal entity are
@@ -58,11 +62,14 @@ func scope(tenantID string) db.Tenant {
 }
 
 // access is the session context a statement runs under: a tenant, a verified
-// subject, both, or neither (the zero value).
+// subject, an invitation token hash, any combination, or none (the zero value).
 type access struct {
 	tenant  string
 	subject db.Subject
+	token   string // hex SHA-256 of an invitation token
 }
+
+func asToken(hash string) access { return access{token: hash} }
 
 func asTenant(tenant string) access             { return access{tenant: tenant} }
 func asSubject(s db.Subject) access             { return access{subject: s} }
@@ -80,6 +87,11 @@ func (f *fixture) run(p *pgxpool.Pool, a access, fn func(db.DBTX) error) error {
 		}
 		if a.subject != (db.Subject{}) {
 			if err := db.SetSubject(f.ctx, tx, a.subject); err != nil {
+				return err
+			}
+		}
+		if a.token != "" {
+			if _, err := tx.Exec(f.ctx, `SELECT set_config('zp.invitation_token_hash', $1, true)`, a.token); err != nil {
 				return err
 			}
 		}
