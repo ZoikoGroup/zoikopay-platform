@@ -12,6 +12,7 @@ SPECTRAL_IMG := stoplight/spectral:6.15.0
 ZP_PG_PORT           ?= 55432
 ZP_MIGRATOR_PASSWORD ?= local-dev-only-migrator
 ZP_MIGRATOR_DSN      ?= postgres://zp_migrator:$(ZP_MIGRATOR_PASSWORD)@localhost:$(ZP_PG_PORT)/zoikopay?sslmode=disable
+ZP_APP_PASSWORD      ?= local-dev-only-app
 
 OPENAPI_SPECS := $(wildcard api/openapi/*.v1.yaml)
 
@@ -66,6 +67,11 @@ migrate: ## Verify integrity, then apply pending migrations (as zp_migrator; ADR
 .PHONY: migrate-status
 migrate-status: ## Show each migration file as applied, pending, CHANGED or MISSING FILE
 	ZP_MIGRATOR_DSN="$(ZP_MIGRATOR_DSN)" go run ./cmd/migrate status -dir db/migrations
+
+.PHONY: seed-local
+seed-local: ## Local stack only: synthetic tenants, merchants and grants for the console's merchant users (as zp_gateway; Q39)
+	$(COMPOSE) exec -T -e PGPASSWORD="$(ZP_APP_PASSWORD)" postgres \
+	  psql -X -q -h localhost -U zp_gateway -d zoikopay -v ON_ERROR_STOP=1 -f - < scripts/seed-local.sql
 
 .PHONY: migrate-verify
 migrate-verify: ## Check migration files offline (names, order, expand-contract annotations)

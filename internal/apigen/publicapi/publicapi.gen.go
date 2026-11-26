@@ -13,6 +13,33 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for GrantPersona.
+const (
+	Mdev  GrantPersona = "mdev"
+	Mfin  GrantPersona = "mfin"
+	Mops  GrantPersona = "mops"
+	Mown  GrantPersona = "mown"
+	Mview GrantPersona = "mview"
+)
+
+// Valid indicates whether the value is a known member of the GrantPersona enum.
+func (e GrantPersona) Valid() bool {
+	switch e {
+	case Mdev:
+		return true
+	case Mfin:
+		return true
+	case Mops:
+		return true
+	case Mown:
+		return true
+	case Mview:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MerchantObject.
 const (
 	MerchantObjectMerchant MerchantObject = "merchant"
@@ -64,6 +91,55 @@ func (e MerchantStatus) Valid() bool {
 	}
 }
 
+// Defines values for PrincipalEnvironment.
+const (
+	Live PrincipalEnvironment = "live"
+	Test PrincipalEnvironment = "test"
+)
+
+// Valid indicates whether the value is a known member of the PrincipalEnvironment enum.
+func (e PrincipalEnvironment) Valid() bool {
+	switch e {
+	case Live:
+		return true
+	case Test:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PrincipalObject.
+const (
+	PrincipalObjectPrincipal PrincipalObject = "principal"
+)
+
+// Valid indicates whether the value is a known member of the PrincipalObject enum.
+func (e PrincipalObject) Valid() bool {
+	switch e {
+	case PrincipalObjectPrincipal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Grant defines model for Grant.
+type Grant struct {
+	EffectiveFrom time.Time `json:"effective_from"`
+	ExpiresAt     time.Time `json:"expires_at"`
+
+	// MerchantId Absent for a tenant-wide grant (every merchant of the tenant in this environment).
+	MerchantId *string `json:"merchant_id,omitempty"`
+
+	// Persona 02-02 merchant persona code, lower case on the wire (ADR 0001).
+	Persona  GrantPersona `json:"persona"`
+	TenantId string       `json:"tenant_id"`
+}
+
+// GrantPersona 02-02 merchant persona code, lower case on the wire (ADR 0001).
+type GrantPersona string
+
 // Merchant defines model for Merchant.
 type Merchant struct {
 	CreatedAt   time.Time      `json:"created_at"`
@@ -82,6 +158,28 @@ type MerchantObject string
 
 // MerchantStatus Registration and review lifecycle only (04-03 §4); never proof of payment eligibility.
 type MerchantStatus string
+
+// Principal defines model for Principal.
+type Principal struct {
+	// Environment The deployment's environment, from configuration (Q36 36.16).
+	Environment PrincipalEnvironment `json:"environment"`
+
+	// Grants Sorted by tenant_id, merchant_id (tenant-wide first), then persona.
+	Grants []Grant `json:"grants"`
+
+	// Issuer The verified token's issuer.
+	Issuer string          `json:"issuer"`
+	Object PrincipalObject `json:"object"`
+
+	// Subject The verified token's subject.
+	Subject string `json:"subject"`
+}
+
+// PrincipalEnvironment The deployment's environment, from configuration (Q36 36.16).
+type PrincipalEnvironment string
+
+// PrincipalObject defines model for Principal.Object.
+type PrincipalObject string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -106,6 +204,9 @@ type ServerInterface interface {
 	// GetMerchant Retrieve a merchant
 	// (GET /merchants/{merchant_id})
 	GetMerchant(w http.ResponseWriter, r *http.Request, merchantId MerchantId)
+	// GetPrincipal The caller's own live grants
+	// (GET /principal)
+	GetPrincipal(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -134,6 +235,20 @@ func (siw *ServerInterfaceWrapper) GetMerchant(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMerchant(w, r, merchantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPrincipal operation middleware
+func (siw *ServerInterfaceWrapper) GetPrincipal(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPrincipal(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -264,6 +379,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/merchants/{merchant_id}", wrapper.GetMerchant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/principal", wrapper.GetPrincipal)
 
 	return m
 }

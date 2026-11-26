@@ -22,6 +22,8 @@ security:
 tags:
   - name: merchants
     description: Merchant profiles (04-03).
+  - name: principal
+    description: What Zoiko Pay has decided the caller may act as (OPEN_QUESTIONS Q39).
 paths:
   /merchants/{merchant_id}:
     get:
@@ -48,6 +50,29 @@ paths:
         '401': {$ref: '#/components/responses/Unauthenticated'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /principal:
+    get:
+      operationId: getPrincipal
+      tags: [principal]
+      summary: The caller's own live grants
+      description: >-
+        Returns the verified caller's own live grants in this deployment's
+        environment, read from merchant.memberships on every request (no cache),
+        so a revoked or expired grant is gone on the next call (02-02 AT-005,
+        AT-015). Authority never comes from the token, headers, query or body.
+        A valid token with no live grant gets an empty list. Never lists another
+        person's grants. The admin console uses it to resolve roles (Q39).
+      responses:
+        '200':
+          description: The caller's live grants; empty when there are none.
+          headers:
+            X-Trace-Id: {$ref: '#/components/headers/TraceId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Principal'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
@@ -101,6 +126,38 @@ components:
         revision: {type: integer, format: int64, minimum: 1}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+    Principal:
+      type: object
+      additionalProperties: false
+      required: [object, issuer, subject, environment, grants]
+      properties:
+        object: {type: string, enum: [principal]}
+        issuer: {type: string, description: The verified token's issuer.}
+        subject: {type: string, description: The verified token's subject.}
+        environment:
+          type: string
+          description: The deployment's environment, from configuration (Q36 36.16).
+          enum: [test, live]
+        grants:
+          type: array
+          description: Sorted by tenant_id, merchant_id (tenant-wide first), then persona.
+          items: {$ref: '#/components/schemas/Grant'}
+    Grant:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, persona, effective_from, expires_at]
+      properties:
+        tenant_id: {type: string, pattern: '^ten_[0-9a-f]{32}$'}
+        merchant_id:
+          type: string
+          pattern: '^mer_[0-9a-f]{32}$'
+          description: Absent for a tenant-wide grant (every merchant of the tenant in this environment).
+        persona:
+          type: string
+          description: 02-02 merchant persona code, lower case on the wire (ADR 0001).
+          enum: [mown, mops, mfin, mdev, mview]
+        effective_from: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
     Problem:
       type: object
       required: [type, title, status, code, trace_id]
