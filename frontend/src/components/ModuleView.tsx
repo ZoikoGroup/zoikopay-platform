@@ -138,7 +138,7 @@ export function ParityScreen({ id }: { id: string }) {
     <div className="stack" style={{ gap: "var(--s-4)" }}>
       <div className="banner" data-tone="dashed" role="note">
         <Info size={16} aria-hidden="true" />
-        <span><strong>TEST records from the console server.</strong> {mod.intent} Requests and approvals are checked and audited by the server; nothing reaches a bank or provider and no money moves.{mod.note ? ` ${mod.note}` : ""}</span>
+        <span><strong>TEST records from the console server.</strong> {mod.intent} Requests and approvals are checked and audited by the server; nothing reaches a bank or provider and no money moves. Money requests need a second person to approve them with their password.</span>
       </div>
       {mod.extra === "sigma" && <SigmaBox />}
       {mod.extra === "capital" && <CapitalOffer status="OFFERED" />}

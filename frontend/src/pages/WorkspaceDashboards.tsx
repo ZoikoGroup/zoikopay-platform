@@ -4,7 +4,6 @@ import { Link, Navigate, useSearchParams } from 'react-router';
 import { Card } from '../components/Card';
 import { ActivityChart } from '../components/charts';
 import { FieldDisplay, ScreenView } from '../components/ScreenView';
-import { useLocalDrafts } from '../components/LocalDrafts';
 import { ParityScreen } from '../components/ModuleView';
 import { PaymentDrawer, PaymentsTable } from '../components/payments';
 import { SandboxIntent } from '../components/SandboxIntent';
@@ -69,13 +68,17 @@ function ExportMetrics({ kpis }: { kpis: Kpi[] }) {
 }
 
 /** Stripe "Automatic payouts": the schedule. Only a local draft exists until a payouts service provides it. */
+/** Stripe "Automatic payouts": the payout schedule, from the console server's TEST records (ZP-STR-014). */
 function AutomaticPayoutsCard() {
-  const { can } = useSession();
-  const { rows } = useLocalDrafts('ZP-STR-014');
-  const latest = rows[0];
-  return <Card title="Automatic Payouts" actions={can('area.finance') ? <ViewLink to="/money?screen=ZP-STR-014&create=1">Change</ViewLink> : undefined}>
-    {latest ? <ul className="dash-list"><li><span>{String(latest.fields.schedule ?? 'Schedule')}<small>{latest.fields.delay ? 'Delay ' + String(latest.fields.delay) + ' · ' : ''}Local draft, awaiting approval</small></span><StatusBadge status={latest.status} /></li></ul>
-      : <ul className="dash-list"><li><span>No schedule from the server<small>The payouts service is not connected, so no automatic schedule is active.</small></span><StatusBadge status="DISABLED" /></li></ul>}
+  const { can, selection } = useSession();
+  const res = useApi(can('area.finance') ? (signal) => api.screen('ZP-STR-014', {}, signal) : null, 'funds-payout-schedule-' + selection.merchantId);
+  const rows = (res.data?.items ?? []).filter((row) => !selection.merchantId || row.merchantId === selection.merchantId);
+  return <Card title="Automatic Payouts" actions={can('area.finance') ? <ViewLink to="/money?screen=ZP-STR-014">Manage</ViewLink> : undefined}>
+    {!can('area.finance') ? <p className="subtle">The payout schedule is outside your role.</p>
+      : res.error ? <ErrorState error={res.error} onRetry={res.refetch} />
+      : !res.data ? <Skeleton height={60} />
+      : !rows.length ? <EmptyState title="No payout schedule">No schedule in your current scope.</EmptyState>
+      : <ul className="dash-list">{rows.slice(0, 4).map((row) => <li key={row.id}><span>{String(row.fields.schedule ?? 'Schedule')}<small>{String(row.fields.merchant ?? '')} · delay {String(row.fields.delay ?? '—')} · TEST</small></span><StatusBadge status={row.status} /></li>)}</ul>}
   </Card>;
 }
 
