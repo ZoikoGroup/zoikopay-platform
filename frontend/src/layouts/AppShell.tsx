@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router";
 import { useMediaQuery } from "../hooks/ui";
 import { Sidebar } from "../navigation/Sidebar";
 import { Header, ScopeBar } from "./Header";
+import { DeveloperBar, SandboxBanner } from "./ShellExtras";
 
 const COLLAPSE_KEY = "zp.console.sidebarCollapsed";
 
@@ -46,11 +47,13 @@ export function AppShell() {
       <Sidebar collapsed={collapsed} onToggle={toggle} onNavigate={() => setMobileOpen(false)} />
       {phone && mobileOpen && <div className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
       <div className="shell-main">
+        <SandboxBanner />
         <Header onOpenMenu={() => setMobileOpen(true)} />
         <ScopeBar />
         <main id="main" className="content" tabIndex={-1}>
           <Outlet />
         </main>
+        <DeveloperBar />
       </div>
     </div>
   );

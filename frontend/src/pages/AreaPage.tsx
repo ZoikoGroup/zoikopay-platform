@@ -4,7 +4,9 @@ import { AuditView } from "../components/AuditView";
 import { PageHead } from "../components/Card";
 import { PaymentDrawer, PaymentsTable } from "../components/payments";
 import { SandboxIntent } from "../components/SandboxIntent";
+import { ModuleView } from "../components/ModuleView";
 import { ScreenView } from "../components/ScreenView";
+import { MODULES } from "../screens/parity";
 import { CreatePaymentWorkspace, FundsWorkspace, OperationsWorkspace, PaymentsWorkspace, RiskWorkspace } from "./WorkspaceDashboards";
 import { Card } from "../components/Card";
 import { Link } from "react-router";
@@ -28,6 +30,7 @@ function PaymentExplorer() {
 }
 
 function Screen({ id }: { id: string }) {
+  if (MODULES[id]) return <ModuleView id={id} />;
   if (id === "ZP-BRW-005") return <PaymentExplorer />;
   if (id === "ZP-BRW-004") return <SandboxIntent />;
   return <ScreenView screenId={id} />;

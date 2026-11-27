@@ -6,8 +6,11 @@ import { useDebounced } from "../hooks/ui";
 import { LAYOUTS, type Column } from "../screens/config";
 import { api } from "../services/api";
 import { formatDateTime, formatDateTimeFull, formatMoney, humanize } from "../services/format";
+import { byTotalSpent, CREATE_FORMS, QUICK_VIEWS } from "../screens/parity";
 import type { ActionView, FieldValue, MoneyValue, RecordView } from "../types/api";
 import { ActionDialog } from "./ActionDialogs";
+import { LocalActionButtons, useDemoStatus } from "./DemoExtras";
+import { CreateButton, CreateDialog, DraftsTable } from "./LocalDrafts";
 import { Money } from "./Money";
 import { Drawer } from "./Overlay";
 import { EmptyState, ErrorState, SourceBadge, StaleIndicator, TableSkeleton } from "./States";
@@ -72,6 +75,7 @@ function RecordDrawer({ screenId, id, onClose }: { screenId: string; id: string;
   const res = useApi((s) => api.record(screenId, id, s), `${screenId}/${id}`);
   const [action, setAction] = useState<ActionView>();
   const [done, setDone] = useState<string>();
+  const statusOf = useDemoStatus(screenId);
   const r = res.data;
   return (
     <>
@@ -101,7 +105,7 @@ function RecordDrawer({ screenId, id, onClose }: { screenId: string; id: string;
           <>
             {done && <div className="banner" role="status"><span><strong>{done}.</strong> Recorded in the audit log.</span></div>}
             <div className="row-between">
-              <StatusBadge status={r.status} />
+              <StatusBadge status={statusOf(r.id, r.status)} />
               <span className="subtle" style={{ fontSize: "var(--fs-xs)" }}>
                 {r.requestedByName ? `Raised by ${r.isOwnRequest ? "you" : r.requestedByName}` : ""} · updated {formatDateTime(r.updatedAt)}
               </span>
@@ -119,6 +123,7 @@ function RecordDrawer({ screenId, id, onClose }: { screenId: string; id: string;
                 </dl>
               </section>
             ))}
+            <LocalActionButtons screenId={screenId} id={r.id} status={statusOf(r.id, r.status)} fields={r.fields} />
             {r.timeline && (
               <section className="stack" style={{ gap: 10 }}>
                 <h3>History and evidence</h3>
@@ -153,6 +158,17 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState("");
   const [q, setQ] = useState(initialQuery);
+  const [viewKey, setViewKey] = useState("all");
+  const views = QUICK_VIEWS[screenId];
+  const quick = views?.find((v) => v.key === viewKey);
+  const demoStatus = useDemoStatus(screenId);
+  const createSpec = CREATE_FORMS[screenId];
+  const [createOpen, setCreating] = useState(false);
+  const creating = !!createSpec && (createOpen || (params.get("screen") === screenId && params.get("create") === "1"));
+  const closeCreate = () => {
+    setCreating(false);
+    setParams((p) => { p.delete("create"); return p; }, { replace: true });
+  };
   const dq = useDebounced(q);
   const query = { status: status || undefined, q: dq || undefined };
   const res = useApi((s) => api.screen(screenId, query, s), `${screenId}${JSON.stringify(query)}`);
@@ -163,6 +179,9 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
   });
   if (!layout) return null;
   const d = res.data;
+  const all = !d ? [] : d.items.map((r) => { const status = demoStatus(r.id, r.status); return status === r.status ? r : { ...r, status }; });
+  const items = quick?.match ? all.filter(quick.match) : all;
+  const shown = quick?.key === "top" ? [...items].sort(byTotalSpent) : items;
 
   return (
     <div className="stack" style={{ gap: "var(--s-4)" }}>
@@ -176,7 +195,18 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
           ))}
         </div>
       )}
+      {createSpec && <DraftsTable screenId={screenId} columns={layout.columns} noun={layout.recordNoun} />}
       <div className="card">
+        {views && (
+          <div className="tabs" role="tablist" aria-label={`${layout.recordNoun} views`} style={{ padding: "0 var(--s-4)" }}>
+            {views.map((v) => (
+              <button key={v.key} role="tab" className="tab" aria-selected={v.key === viewKey} disabled={!!v.unavailable} title={v.unavailable}
+                onClick={() => setViewKey(v.key)}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="filters" role="search" aria-label={`Filter ${layout.recordNoun}s`}>
           <div className="search">
             <Search size={14} className="lead" aria-hidden="true" />
@@ -189,12 +219,13 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
           <div className="row" style={{ marginLeft: "auto" }}>
             <SourceBadge source={res.meta?.source} />
             <StaleIndicator stale={res.stale} loadedAt={res.loadedAt} onRefresh={res.refetch} />
-            <button className="btn btn-sm" disabled={!d?.items.length} onClick={() => d && exportCsv(screenId, layout.columns, d.items)}>
+            <button className="btn btn-sm" disabled={!shown.length} onClick={() => exportCsv(screenId, layout.columns, shown)}>
               <Download size={13} aria-hidden="true" /> Export CSV
             </button>
+            {createSpec && <CreateButton spec={createSpec} onClick={() => setCreating(true)} />}
           </div>
         </div>
-        {res.error ? <ErrorState error={res.error} onRetry={res.refetch} /> : !d ? <TableSkeleton /> : d.items.length === 0 ? (
+        {res.error ? <ErrorState error={res.error} onRetry={res.refetch} /> : !d ? <TableSkeleton /> : shown.length === 0 ? (
           <EmptyState title={`No ${layout.recordNoun}s match`}>Try another status or search, or widen the merchant scope in the header.</EmptyState>
         ) : (
           <div className="table-wrap">
@@ -208,7 +239,7 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
                 </tr>
               </thead>
               <tbody>
-                {d.items.map((r) => {
+                {shown.map((r) => {
                   const actionable = r.actions.filter((a) => a.allowed);
                   return (
                     <tr key={r.id} className="clickable" aria-selected={r.id === open} onClick={() => setOpen(r.id)}>
@@ -223,9 +254,10 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
             </table>
           </div>
         )}
-        {d && <div className="table-foot"><span>{d.total} {layout.recordNoun}{d.total === 1 ? "" : "s"}</span><span>Actions are checked again by the server</span></div>}
+        {d && <div className="table-foot"><span>{shown.length} {layout.recordNoun}{shown.length === 1 ? "" : "s"}</span><span>Actions are checked again by the server</span></div>}
       </div>
       {open && <RecordDrawer screenId={screenId} id={open} onClose={() => setOpen(undefined)} />}
+      {creating && createSpec && <CreateDialog spec={createSpec} screenId={screenId} onClose={closeCreate} />}
     </div>
   );
 }

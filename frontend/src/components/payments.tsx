@@ -6,6 +6,7 @@ import { useSession } from "../hooks/useSession";
 import { api, type PaymentQuery } from "../services/api";
 import { formatDateTime, formatDateTimeFull, humanize, shortId } from "../services/format";
 import { INTENT_STATUSES, type EvidenceEvent, type Payment } from "../types/api";
+import { LocalActionButtons, useDemoStatus } from "./DemoExtras";
 import { Money } from "./Money";
 import { Drawer } from "./Overlay";
 import { ErrorState, EmptyState, SourceBadge, StaleIndicator, TableSkeleton } from "./States";
@@ -145,6 +146,7 @@ export function PaymentsTable({ compact, onOpen, selectedId }: { compact?: boole
 }
 
 function PaymentRow({ p, compact, selected, onOpen }: { p: Payment; compact?: boolean; selected: boolean; onOpen: () => void }) {
+  const statusOf = useDemoStatus("ZP-BRW-005");
   return (
     <tr className="clickable" aria-selected={selected} onClick={onOpen}>
       <td className="num">{formatDateTime(p.createdAt)}</td>
@@ -152,7 +154,7 @@ function PaymentRow({ p, compact, selected, onOpen }: { p: Payment; compact?: bo
       <td>{p.merchantName}</td>
       <td>{p.method ? <span>{p.method.brand.toUpperCase()} <span className="mono subtle">•• {p.method.last4}</span></span> : <span className="subtle" title="Not available for your role">Restricted</span>}</td>
       <td className="right"><Money minor={p.amountMinor} currency={p.currency} /></td>
-      <td><StatusBadge status={p.status} /></td>
+      <td><StatusBadge status={statusOf(p.id, p.status)} /></td>
       {!compact && <td><span className="badge env-badge" data-env={p.environment}>{p.environment}</span></td>}
       <td className="right">
         <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onOpen(); }} aria-label={`Investigate payment ${p.id}`}>Investigate</button>
@@ -164,6 +166,7 @@ function PaymentRow({ p, compact, selected, onOpen }: { p: Payment; compact?: bo
 /** Evidence drawer: one payment's facts and its evidence timeline, each with provenance. */
 export function PaymentDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const res = useApi((s) => api.payment(id, s), id);
+  const statusOf = useDemoStatus("ZP-BRW-005");
   const p = res.data;
   return (
     <Drawer
@@ -181,7 +184,7 @@ export function PaymentDrawer({ id, onClose }: { id: string; onClose: () => void
           <section className="stack" style={{ gap: 12 }} aria-label="Summary">
             <div className="row-between">
               <div className="kpi-value"><Money minor={p.amountMinor} currency={p.currency} /></div>
-              <StatusBadge status={p.status} />
+              <StatusBadge status={statusOf(p.id, p.status)} />
             </div>
             <dl className="kv">
               <dt>Intent status</dt><dd><StatusBadge status={p.status} /> <span className="subtle">(06-01)</span></dd>
@@ -196,6 +199,8 @@ export function PaymentDrawer({ id, onClose }: { id: string; onClose: () => void
               <dt>Last updated</dt><dd className="num">{formatDateTimeFull(p.updatedAt)}</dd>
             </dl>
           </section>
+
+          <LocalActionButtons screenId="ZP-BRW-005" id={p.id} status={statusOf(p.id, p.status)} fields={{}} />
 
           <hr className="divider" />
 

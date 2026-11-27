@@ -115,6 +115,55 @@ export const LAYOUTS: Record<string, ScreenLayout> = {
         S("expires", "Expires", "mono"), S("apiVersion", "API version", "mono")] },
     ],
   },
+  // Stripe-parity screens (ZP-COM-0nn). Without these the Customers & Billing tabs rendered nothing.
+  "ZP-COM-001": {
+    recordNoun: "customer",
+    columns: [S("name", "Customer"), S("email", "Email"), S("merchant", "Merchant"), S("country", "Country"), S("payments", "Payments", "mono"), S("totalSpent", "Total spent", "money"), S("created", "Created", "mono")],
+    sections: [
+      { title: "Customer", fields: [S("name", "Name"), S("email", "Email (masked)"), S("country", "Country"), S("currency", "Currency", "mono"), S("created", "Created", "mono")] },
+      { title: "Activity", fields: [S("merchant", "Merchant"), S("payments", "Payments", "mono"), S("totalSpent", "Total spent", "money"), S("note", "Note")] },
+    ],
+  },
+  "ZP-COM-002": {
+    recordNoun: "product",
+    columns: [S("name", "Name"), S("merchant", "Merchant"), S("price", "Price", "money"), S("pricing", "Pricing"), S("taxCode", "Tax code", "mono"), S("created", "Created", "mono")],
+    sections: [
+      { title: "Product", fields: [S("name", "Name"), S("merchant", "Merchant"), S("taxCode", "Tax code", "mono"), S("created", "Created", "mono")] },
+      { title: "Pricing", fields: [S("price", "Price", "money"), S("pricing", "Prices"), S("billing", "Billing")] },
+    ],
+  },
+  "ZP-COM-003": {
+    recordNoun: "payment link",
+    columns: [S("product", "Product"), S("merchant", "Merchant"), S("price", "Price", "money"), S("payments", "Payments", "mono"), S("collected", "Collected", "money"), S("url", "Link", "mono")],
+    sections: [
+      { title: "Link", fields: [S("url", "URL", "mono"), S("product", "Product"), S("merchant", "Merchant"), S("price", "Price", "money"), S("created", "Created", "mono")] },
+      { title: "Performance", fields: [S("payments", "Payments", "mono"), S("collected", "Collected", "money")] },
+    ],
+  },
+  "ZP-COM-004": {
+    recordNoun: "subscription",
+    columns: [S("customer", "Customer"), S("product", "Product"), S("merchant", "Merchant"), S("amount", "Amount", "money"), S("interval", "Interval"), S("currentPeriodEnd", "Next billing", "mono")],
+    sections: [
+      { title: "Subscription", fields: [S("customer", "Customer"), S("product", "Product"), S("merchant", "Merchant"), S("amount", "Amount", "money"), S("interval", "Interval")] },
+      { title: "Billing", fields: [S("started", "Started", "mono"), S("currentPeriodEnd", "Current period ends", "mono"), S("collection", "Collection"), S("note", "Note")] },
+    ],
+  },
+  "ZP-COM-005": {
+    recordNoun: "invoice",
+    columns: [S("number", "Number", "mono"), S("customer", "Customer"), S("merchant", "Merchant"), S("amountDue", "Amount due", "money"), S("amountPaid", "Paid", "money"), S("dueDate", "Due", "mono")],
+    sections: [
+      { title: "Invoice", fields: [S("number", "Number", "mono"), S("customer", "Customer"), S("email", "Email (masked)"), S("merchant", "Merchant"), S("source", "Source")] },
+      { title: "Amounts and dates", fields: [S("amountDue", "Amount due", "money"), S("amountPaid", "Amount paid", "money"), S("issued", "Issued", "mono"), S("dueDate", "Due date", "mono")] },
+    ],
+  },
+  "ZP-COM-006": {
+    recordNoun: "tax rate",
+    columns: [S("name", "Name"), S("jurisdiction", "Jurisdiction"), S("rate", "Rate", "mono"), S("inclusive", "Inclusive"), S("legalEntity", "Legal cell", "mono")],
+    sections: [
+      { title: "Tax rate", fields: [S("name", "Name"), S("jurisdiction", "Jurisdiction"), S("rate", "Rate", "mono"), S("inclusive", "Inclusive / exclusive"), S("legalEntity", "Legal cell", "mono")] },
+      { title: "Use", fields: [S("appliesTo", "Applies to"), S("source", "Source")] },
+    ],
+  },
   "ZP-BRW-014": {
     recordNoun: "release",
     columns: [S("candidate", "Candidate", "mono"), S("legalCell", "Legal cell", "mono"), S("cohort", "Cohort"), S("env", "Env", "mono"), S("changeWindow", "Change window", "mono")],

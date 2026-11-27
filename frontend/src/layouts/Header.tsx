@@ -1,4 +1,4 @@
-import { CircleHelp, LogOut, Menu, SlidersHorizontal } from "lucide-react";
+import { CircleHelp, LogOut, Menu, Plus, Settings, SlidersHorizontal } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { GlobalSearch } from "../components/GlobalSearch";
@@ -8,6 +8,7 @@ import { useDismiss } from "../hooks/ui";
 import { useSession } from "../hooks/useSession";
 import { findNav } from "../navigation/navConfig";
 import { signOut } from "../pages/MiscPages";
+import { QuickCreateMenu, SetupGuide } from "./ShellExtras";
 import type { Environment } from "../types/api";
 
 function Breadcrumb() {
@@ -28,7 +29,7 @@ function initials(name: string) {
 }
 
 function UserMenu() {
-  const { me } = useSession();
+  const { me, can, scope, selection, setSelection } = useSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(ref, open, () => setOpen(false));
@@ -56,7 +57,21 @@ function UserMenu() {
             </dl>
           </div>
           <hr className="divider" />
+          {scope && scope.merchants.length > 1 && (
+            <>
+              <div className="popover-head"><strong>Switch business</strong></div>
+              <ul className="menu-list">
+                <li><button className="menu-item" data-active={!selection.merchantId || undefined} onClick={() => { setSelection({ merchantId: "" }); setOpen(false); }}>All businesses ({scope.merchants.length})</button></li>
+                {scope.merchants.map((m) => (
+                  <li key={m.id}><button className="menu-item" data-active={selection.merchantId === m.id || undefined} onClick={() => { setSelection({ merchantId: m.id }); setOpen(false); }}>{m.displayName}</button></li>
+                ))}
+              </ul>
+              <hr className="divider" />
+            </>
+          )}
           <ul className="menu-list">
+            {can("overview.view") && <li><Link className="menu-item" to="/settings" onClick={() => setOpen(false)}><Settings size={15} aria-hidden="true" /> Settings</Link></li>}
+            {can("area.merchants") && <li><Link className="menu-item" to="/merchants?screen=ZP-BRW-002" onClick={() => setOpen(false)}><Plus size={15} aria-hidden="true" /> Start a new business</Link></li>}
             <li>
               <button className="menu-item" onClick={signOut}>
                 <LogOut size={15} aria-hidden="true" /> Sign out
@@ -150,8 +165,10 @@ export function Header({ onOpenMenu }: { onOpenMenu: () => void }) {
         <span className="hide-phone"><EnvSwitch /></span>
         {scope && <select className="header-currency" aria-label="Display currency" value={selection.currency} onChange={(e) => setSelection({ currency: e.target.value })}>{scope.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>}
         {scope && <ScopeMenu />}
+        <QuickCreateMenu />
         <NotificationPanel />
         <HelpMenu />
+        <SetupGuide />
         <UserMenu />
       </div>
     </header>

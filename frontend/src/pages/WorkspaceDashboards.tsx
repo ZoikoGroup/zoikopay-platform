@@ -4,6 +4,8 @@ import { Link, Navigate, useSearchParams } from 'react-router';
 import { Card } from '../components/Card';
 import { ActivityChart } from '../components/charts';
 import { FieldDisplay, ScreenView } from '../components/ScreenView';
+import { useLocalDrafts } from '../components/LocalDrafts';
+import { ModuleView } from '../components/ModuleView';
 import { PaymentDrawer, PaymentsTable } from '../components/payments';
 import { SandboxIntent } from '../components/SandboxIntent';
 import { EmptyState, ErrorState, NoPermission, Skeleton, SourceBadge } from '../components/States';
@@ -66,6 +68,17 @@ function ExportMetrics({ kpis }: { kpis: Kpi[] }) {
   return <button className="btn btn-sm" onClick={download} disabled={!kpis.length}><ArrowDownToLine size={14} />Export metrics</button>;
 }
 
+/** Stripe "Automatic payouts": the schedule. Only a local draft exists until a payouts service provides it. */
+function AutomaticPayoutsCard() {
+  const { can } = useSession();
+  const { rows } = useLocalDrafts('ZP-STR-014');
+  const latest = rows[0];
+  return <Card title="Automatic Payouts" actions={can('area.finance') ? <ViewLink to="/money?screen=ZP-STR-014&create=1">Change</ViewLink> : undefined}>
+    {latest ? <ul className="dash-list"><li><span>{String(latest.fields.schedule ?? 'Schedule')}<small>{latest.fields.delay ? 'Delay ' + String(latest.fields.delay) + ' · ' : ''}Local draft, awaiting approval</small></span><StatusBadge status={latest.status} /></li></ul>
+      : <ul className="dash-list"><li><span>No schedule from the server<small>The payouts service is not connected, so no automatic schedule is active.</small></span><StatusBadge status="DISABLED" /></li></ul>}
+  </Card>;
+}
+
 function sumMoney(rows: RecordView[], field: string, currency: string): string {
   return rows.reduce((total, row) => {
     const value = row.fields[field];
@@ -106,7 +119,9 @@ export function PaymentsWorkspace({ reports = false }: { reports?: boolean }) {
   const icons = [Layers3, CheckCircle2, Activity, ShieldCheck, Clock3];
   const setView = (value: string) => setParams((current) => { current.set('view', value);current.delete('screen');return current; });
   const terminal = ['SUCCEEDED', 'FAILED', 'PROCESSING', 'REQUIRES_CAPTURE'];
-  const tabs = [{ id: 'overview', label: 'Overview', icon: Layers3 }, { id: 'transactions', label: 'Transactions', icon: CreditCard }, ...(can('area.refunds_disputes') ? [{ id: 'refunds', label: 'Refunds & Disputes', icon: RefreshCw }] : []), { id: 'performance', label: 'Performance', icon: BarChart3 }];
+  const tabs = [{ id: 'overview', label: 'Overview', icon: Layers3 }, { id: 'transactions', label: 'Transactions', icon: CreditCard }, ...(can('area.refunds_disputes') ? [{ id: 'refunds', label: 'Refunds & Disputes', icon: RefreshCw }] : []), ...(can('area.finance') && !reports ? [{ id: 'topups', label: 'Top-ups', icon: Wallet }, { id: 'fees', label: 'Collected Fees', icon: Layers3 }, { id: 'transfers', label: 'Transfers', icon: ArrowRight }] : []), { id: 'performance', label: 'Performance', icon: BarChart3 }];
+  // Stripe's Transactions tabs with no backend yet: demo values (screens/parity.ts).
+  const moneyTab = ({ topups: 'ZP-STR-010', fees: 'ZP-STR-012', transfers: 'ZP-STR-011' } as Record<string, string>)[view];
   // Old links (/payments?view=links|recurring) now open the Customers & Billing screens.
   if (view === 'links' || view === 'recurring') return <Navigate to={'/commerce?screen=' + (view === 'links' ? 'ZP-COM-003' : 'ZP-COM-004')} replace />;
   if (reports && view === 'exports') return <><Heading title="Exports" description="Download only the scoped metrics your role may access." /><SandboxNote /><Card title="Payment Metrics" actions={<ExportMetrics kpis={kpis.data?.kpis ?? []} />}>{kpis.error ? <ErrorState error={kpis.error} onRetry={kpis.refetch} /> : <ul className="dash-list">{kpis.data?.kpis.map((item) => <li key={item.key}><span>{item.label}</span><strong>{kpiValue(item)}</strong></li>)}</ul>}</Card></>;
@@ -114,7 +129,7 @@ export function PaymentsWorkspace({ reports = false }: { reports?: boolean }) {
     <Heading title={reports ? 'Reports & Analytics' : 'Payments – Payment Explorer'} description={reports ? 'Inspect scoped payment metrics and export the information your role permits.' : 'Search, monitor, and manage payment transactions across channels and payment methods.'}><ExportMetrics kpis={kpis.data?.kpis ?? []} /></Heading>
     <SandboxNote />
     <Tabs items={tabs} active={view} onChange={setView} />
-    {view === 'refunds' && can('area.refunds_disputes') ? <ScreenView screenId="ZP-BRW-008" /> : <>
+    {moneyTab && can('area.finance') ? <ModuleView id={moneyTab} /> : view === 'refunds' && can('area.refunds_disputes') ? <ScreenView screenId="ZP-BRW-008" /> : <>
       {kpis.error && <div className="dash-error"><ErrorState error={kpis.error} onRetry={kpis.refetch} /></div>}
       <Metrics items={Array.from({ length: 5 }, (_, i) => ({ label: metrics[i]?.label ?? ['Total Payment Volume', 'Successful Transactions', 'Success Rate', 'Fraud Rate', 'Pending Approvals'][i] ?? 'Metric', value: kpiValue(metrics[i]), hint: metrics[i]?.restricted ? 'Not included in your role' : 'Selected currency · ' + period.toUpperCase(), icon: icons[i] ?? Layers3, tone: ['green', 'blue', 'green', 'red', 'amber'][i] }))} />
       {view === 'transactions' ? <Card title="All Transactions" flush>{can('payments.read') ? <PaymentsTable onOpen={setPayment} selectedId={selectedPayment} /> : <NoPermission />}</Card> : <div className="dash-layout"><div className="dash-left">
@@ -151,7 +166,7 @@ export function FundsWorkspace({ payoutsOnly = false }: { payoutsOnly?: boolean 
     const paidOut = sumMoney(payoutRows.filter((row) => row.status === 'SUCCEEDED'), 'amount', selection.currency);
     const pendingOut = sumMoney(payoutRows.filter((row) => ['REQUIRES_APPROVAL', 'READY', 'PROCESSING', 'PROVIDER_ACCEPTED'].includes(row.status)), 'amount', selection.currency);
     return <>
-      <Heading title="Balances & Accounts" description="Incoming and available funds, and payouts to the bank, for your authorized workspace."><div className="row">{can('area.payouts') && <Action to="/payouts?screen=ZP-BRW-010" icon={ArrowRight} primary>Pay out</Action>}<Action to="/finance?screen=ZP-BRW-009" icon={BookOpen}>Statements</Action></div></Heading>
+      <Heading title="Balances & Accounts" description="Incoming and available funds, and payouts to the bank, for your authorized workspace."><div className="row" style={{ flexWrap: 'wrap' }}>{can('area.payouts') && <Action to="/payouts?screen=ZP-BRW-010" icon={ArrowRight} primary>Pay out</Action>}{can('area.finance') && <><Action to="/money?screen=ZP-STR-010&create=1" icon={Plus}>Add funds</Action><Action to="/money?screen=ZP-STR-011&create=1" icon={ArrowRight}>Transfer</Action><Action to="/money?screen=ZP-STR-014" icon={CalendarDays}>Manage payouts</Action><Action to="/money?screen=ZP-STR-013&create=1" icon={Globe2}>Add settlement currency</Action></>}<Action to="/finance?screen=ZP-BRW-009" icon={BookOpen}>Statements</Action></div></Heading>
       <SandboxNote />
       {settlement.error && <ErrorState error={settlement.error} onRetry={settlement.refetch} />}
       <Metrics items={[
@@ -164,6 +179,7 @@ export function FundsWorkspace({ payoutsOnly = false }: { payoutsOnly?: boolean 
         <Card title="Balance Summary" eyebrow="Per currency · TEST statement batches" flush>{!settlement.data ? <Skeleton height={140} /> : !currencies.length ? <EmptyState title="No balances">There are no statement batches in your scope.</EmptyState> : <div className="table-wrap"><table className="table"><caption className="sr-only">Balance summary by currency</caption><thead><tr><th>Currency</th><th>Incoming</th><th>Available</th><th>Unresolved variance</th></tr></thead><tbody>{currencies.map((currency) => <tr key={currency}><td><strong>{currency}</strong></td><td className="num">{formatMoney(sumMoney(open, 'expectedNet', currency), currency)}</td><td className="num">{formatMoney(sumMoney(closed, 'bankReceived', currency), currency)}</td><td className="num">{formatMoney(sumMoney(settled, 'residual', currency), currency)}</td></tr>)}</tbody></table></div>}</Card>
         <div style={{ marginTop: 16 }}><Card title="Recent Payouts" flush actions={can('area.payouts') ? <ViewLink to="/payouts?screen=ZP-BRW-010">View all</ViewLink> : undefined}>{can('area.payouts') ? <Queue data={payouts.data} to="/payouts?screen=ZP-BRW-010" kind="Payout" /> : <NoPermission />}</Card></div>
       </div><aside className="dash-side">
+        <AutomaticPayoutsCard />
         <Card title="Evidence & Controls"><ul className="dash-list"><li><span>Balance source<small>Derived from TEST statements, not a ledger balance</small></span><StatusBadge status="UNVERIFIED" /></li><li><span>Payout approval<small>Maker ≠ checker, password re-entry</small></span><ShieldCheck size={18} /></li><li><span>Production payouts<small>Not enabled by this dashboard</small></span><StatusBadge status="DISABLED" /></li></ul></Card>
         <Card title="Reports"><div className="stack"><ViewLink to="/finance?screen=ZP-BRW-009">Statements and reconciliation</ViewLink><ViewLink to="/reports?view=exports">Export metrics</ViewLink></div></Card>
       </aside></div>

@@ -32,6 +32,8 @@ describe("side rail (Business Requirements 01-05 §07)", () => {
   it("hides items by persona", () => {
     expect(visibleNav({ permissions: POR }).map((i) => i.label)).toEqual([
       "Overview", "Merchants", "Payment Operations", "Routing", "Partners", "Refunds & Disputes", "Finance", "Reports & Analytics", "Settings", "Customers & Billing",
+      // Stripe areas with no backend yet (frontend preview, local drafts only).
+      "Billing Tools", "Payment Products", "More Products", "Money Movement", "Treasury & Capital", "Reporting Tools",
     ]);
     expect(visibleNav({ permissions: SUPER_ADMIN }).map((i) => i.label)).toEqual(["Super Admin", "Operations"]); // Super Admin page only
     expect(visibleNav({ permissions: [] })).toEqual([]);

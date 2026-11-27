@@ -3,6 +3,7 @@ import {
   AuditsGlyph, DevelopersGlyph, FinanceGlyph, MerchantsGlyph, OverviewGlyph, PartnersGlyph, PaymentsGlyph, PayoutsGlyph, RefundsGlyph,
   AccessGlyph, ExceptionalGlyph, PlatformGlyph, ReleaseGlyph, RiskGlyph, RoutingGlyph, type GlyphProps,
 } from "./icons";
+import { MODULE_GROUPS } from "../screens/parity";
 import type { Me, Permission } from "../types/api";
 
 export interface NavItem {
@@ -48,7 +49,15 @@ export const NAV: NavItem[] = [
   { key: "settings", label: "Settings", path: "/settings", icon: PlatformGlyph, group: "Platform", permission: "overview.view", screens: [] },
   // Not in the §07 rail: the Stripe dashboard areas (customers, catalogue, links, billing, tax). Read-only TEST fixtures.
   { key: "commerce", label: "Customers & Billing", path: "/commerce", icon: PaymentsGlyph, group: "Workspace", permission: "area.payment_operations",
-    screens: ["ZP-COM-001", "ZP-COM-002", "ZP-COM-003", "ZP-COM-004", "ZP-COM-005", "ZP-COM-006"] },
+    screens: ["ZP-COM-001", "ZP-COM-002", "ZP-STR-001", "ZP-STR-002", "ZP-STR-003", "ZP-STR-004", "ZP-COM-006", "ZP-COM-003", "ZP-COM-004", "ZP-COM-005"] },
+  // Stripe areas with no backend API yet: frontend preview, local drafts only (screens/parity.ts).
+  { key: "billing", label: "Billing Tools", path: "/billing", icon: PaymentsGlyph, group: "Workspace", permission: "area.payment_operations", screens: MODULE_GROUPS.billing },
+  { key: "payment-products", label: "Payment Products", path: "/payment-products", icon: PaymentsGlyph, group: "Workspace", permission: "area.payment_operations", screens: MODULE_GROUPS.paymentProducts },
+  { key: "more-products", label: "More Products", path: "/more-products", icon: MerchantsGlyph, group: "Workspace", permission: "area.payment_operations", screens: MODULE_GROUPS.moreProducts },
+  { key: "money", label: "Money Movement", path: "/money", icon: FinanceGlyph, group: "Financial Operations", permission: "area.finance", screens: MODULE_GROUPS.money },
+  { key: "treasury", label: "Treasury & Capital", path: "/treasury", icon: FinanceGlyph, group: "Financial Operations", permission: "area.finance", screens: MODULE_GROUPS.treasury },
+  { key: "reporting", label: "Reporting Tools", path: "/reporting", icon: AuditsGlyph, group: "Financial Operations", permission: "area.finance", screens: MODULE_GROUPS.reporting },
+  { key: "workbench", label: "Workbench", path: "/workbench", icon: DevelopersGlyph, group: "Platform", permission: "area.developers", screens: MODULE_GROUPS.workbench },
 ];
 
 export function isVisible(item: NavItem, me: Pick<Me, "permissions">): boolean {
