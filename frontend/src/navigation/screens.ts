@@ -41,4 +41,17 @@ export const SCREENS: Record<string, ScreenSpec> = {
     intent: "Provide API references, scoped key lifecycle, signed webhook tests and reconciled evidence-grade reporting." },
   "ZP-BRW-014": { id: "ZP-BRW-014", title: "Acceptance & Release Gate Control Room", personas: "PAY-QA, CTO, PAY-COMP, PAY-FIN", tier: "Internal / P0",
     intent: "Tie every BR, UC, UI contract, fraud/regulatory decision, provider certification and financial oracle to G0–G7." },
+  // Stripe-parity screens (not in Business Requirements §07). Read-only TEST fixtures.
+  "ZP-COM-001": { id: "ZP-COM-001", title: "Customers", personas: "MER-OPS, PAY-OPS, MER-FIN, MER-DEV", tier: "Stripe parity / TEST",
+    intent: "See who pays each merchant: masked contact, country, number of payments and total spent." },
+  "ZP-COM-002": { id: "ZP-COM-002", title: "Product Catalogue", personas: "MER-OPS, PAY-OPS, MER-FIN, MER-DEV", tier: "Stripe parity / TEST",
+    intent: "List what each merchant sells, with price, one-off or recurring billing, and tax code." },
+  "ZP-COM-003": { id: "ZP-COM-003", title: "Payment Links", personas: "MER-OPS, PAY-OPS, MER-FIN, MER-DEV", tier: "Stripe parity / TEST",
+    intent: "Shareable links that take a payment without a website, with payments taken and amount collected." },
+  "ZP-COM-004": { id: "ZP-COM-004", title: "Subscriptions", personas: "MER-OPS, PAY-OPS, MER-FIN, MER-DEV", tier: "Stripe parity / TEST",
+    intent: "Recurring payments: customer, plan, interval, next billing date and state (active, trialing, past due, canceled)." },
+  "ZP-COM-005": { id: "ZP-COM-005", title: "Invoices", personas: "MER-OPS, PAY-OPS, MER-FIN, MER-DEV", tier: "Stripe parity / TEST",
+    intent: "Invoices sent to customers: amount due, amount paid, due date and state (draft, open, paid, void, uncollectible)." },
+  "ZP-COM-006": { id: "ZP-COM-006", title: "Tax Rates", personas: "MER-FIN, PAY-OPS", tier: "Stripe parity / TEST",
+    intent: "Tax rates per jurisdiction applied to products and invoices. Fixture table, not tax advice." },
 };

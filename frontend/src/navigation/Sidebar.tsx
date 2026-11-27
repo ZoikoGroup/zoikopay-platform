@@ -1,4 +1,4 @@
-import { Activity, ArrowDownToLine, ArrowLeftRight, BadgeCheck, BarChart3, BookOpen, Building2, ChartNoAxesCombined, ChevronRight, Code2, CreditCard, FileCheck2, FileText, House, KeyRound, Link2, ListChecks, LogOut, Network, PanelLeftClose, PanelLeftOpen, Repeat2, Settings, ShieldCheck, TriangleAlert, Undo2, Users, Wallet, Webhook } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowLeftRight, BadgeCheck, BarChart3, BookOpen, Building2, ChartNoAxesCombined, ChevronRight, Code2, CreditCard, FileCheck2, FileText, House, KeyRound, Link2, ListChecks, LogOut, Network, Package, PanelLeftClose, PanelLeftOpen, Percent, Receipt, Repeat2, Settings, ShieldCheck, TriangleAlert, Undo2, Users, Wallet, Webhook } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Brand } from '../components/Brand';
@@ -19,10 +19,16 @@ export const RAIL_SECTIONS: { label: string; items: RailItem[] }[] = [
   ] },
   { label: 'Payments', items: [
     { label: 'Create Payment', to: '/payments?screen=ZP-BRW-004', icon: ArrowLeftRight, permission: 'area.payment_operations' },
-    { label: 'Payment Links', to: '/payments?view=links', icon: Link2, permission: 'area.payment_operations' },
-    { label: 'Recurring Payments', to: '/payments?view=recurring', icon: Repeat2, permission: 'area.payment_operations' },
+    { label: 'Payment Links', to: '/commerce?screen=ZP-COM-003', icon: Link2, permission: 'area.payment_operations' },
     { label: 'Refunds & Adjustments', to: '/refunds', icon: Undo2, permission: 'area.refunds_disputes' },
     { label: 'Routing Policies', to: '/routing', icon: Network, permission: 'area.routing' },
+  ] },
+  { label: 'Customers & Billing', items: [
+    { label: 'Customers', to: '/commerce?screen=ZP-COM-001', icon: Users, permission: 'area.payment_operations' },
+    { label: 'Product Catalogue', to: '/commerce?screen=ZP-COM-002', icon: Package, permission: 'area.payment_operations' },
+    { label: 'Subscriptions', to: '/commerce?screen=ZP-COM-004', icon: Repeat2, permission: 'area.payment_operations' },
+    { label: 'Invoices', to: '/commerce?screen=ZP-COM-005', icon: Receipt, permission: 'area.payment_operations' },
+    { label: 'Tax Rates', to: '/commerce?screen=ZP-COM-006', icon: Percent, permission: 'area.payment_operations' },
   ] },
   { label: 'Funds & Payouts', items: [
     { label: 'Balances & Accounts', to: '/finance?view=balances', icon: Wallet, permission: 'area.finance' },

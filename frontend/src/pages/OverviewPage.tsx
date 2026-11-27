@@ -10,8 +10,8 @@ import { useApi } from '../hooks/useApi';
 import { useSession } from '../hooks/useSession';
 import dots from '../assets/world-dots.svg';
 import { api } from '../services/api';
-import { formatCount, formatDay, formatMoney, formatRelative, humanize, percentChangeMinor } from '../services/format';
-import type { ActivityResponse, Kpi, Permission, RecordView } from '../types/api';
+import { formatCount, formatDay, formatMoney, formatRelative, humanize, percentChange, percentChangeMinor } from '../services/format';
+import type { ActivityResponse, Kpi, Period, Permission, RecordView } from '../types/api';
 
 type Glyph = typeof Activity;
 function ReadMore({ to, children = 'View all' }: { to: string; children?: ReactNode }) {
@@ -32,8 +32,18 @@ function moneyFrom(rows: RecordView[], field: string, currency: string) {
   }, 0n).toString();
 }
 const colors = ['#009f43', '#176bda', '#9448d1', '#e7ad27'];
+const PERIOD_LABEL: Record<Period, string> = { '24h': 'last 24 hours', '7d': 'last 7 days', '30d': 'last 30 days' };
+const PREVIOUS_LABEL: Record<Period, string> = { '24h': 'previous 24 hours', '7d': 'previous 7 days', '30d': 'previous 30 days' };
+/** "+4.2% vs previous 7 days", as Stripe's "Compare: previous period". */
+function compared(kpi: Kpi | undefined, period: Period): string | null {
+  if (!kpi || kpi.restricted || kpi.value === null || kpi.previous === null) return null;
+  if (kpi.unit === 'minor') { const change = percentChangeMinor(kpi.value, kpi.previous); return change && change + ' vs ' + PREVIOUS_LABEL[period]; }
+  if (kpi.unit === 'percent') { const delta = Number(kpi.value) - Number(kpi.previous); return Number.isFinite(delta) ? (delta >= 0 ? '+' : '−') + Math.abs(delta).toFixed(1) + ' pts vs ' + PREVIOUS_LABEL[period] : null; }
+  const change = percentChange(kpi.value, kpi.previous); return change && change + ' vs ' + PREVIOUS_LABEL[period];
+}
 type FlowMode = 'volume' | 'transactions' | 'success';
-function FlowChart({ data, mode }: { data: ActivityResponse; mode: FlowMode }) {
+function FlowChart({ data, mode, period }: { data: ActivityResponse; mode: FlowMode; period: Period }) {
+  const tick = (start: string) => period === '24h' ? new Date(start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : formatDay(start);
   const id = useId();
   const values = data.buckets.map((bucket) => mode === 'volume' ? Number(bucket.volumeMinor ?? '0') : mode === 'transactions' ? bucket.count : bucket.count ? bucket.succeeded / bucket.count * 100 : 0);
   const maximum = mode === 'success' ? 100 : Math.max(1, ...values) * 1.12;
@@ -45,7 +55,7 @@ function FlowChart({ data, mode }: { data: ActivityResponse; mode: FlowMode }) {
     if (!bucket) return '—';
     return mode === 'volume' ? formatMoney(bucket.volumeMinor ?? '0', data.currency) : mode === 'transactions' ? formatCount(bucket.count) : bucket.count ? (bucket.succeeded / bucket.count * 100).toFixed(1) + '%' : 'No transactions';
   };
-  return <div className="cc-flow-chart"><svg viewBox="0 0 510 199" role="img" aria-label={label + ', last 30 days'}><defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop stopColor="#00c34c" stopOpacity=".4" /><stop offset="1" stopColor="#00c34c" stopOpacity=".03" /></linearGradient></defs>{[0, .25, .5, .75, 1].map((ratio) => <g key={ratio}><line x1="58" x2="490" y1={165 - ratio * 143} y2={165 - ratio * 143} stroke="var(--chart-grid)" /><text x="48" y={168 - ratio * 143} textAnchor="end" fontSize="9" fill="var(--text-2)">{mode === 'volume' ? formatMoney(Math.round(maximum * ratio).toString(), data.currency, { compact: true }) : Math.round(maximum * ratio) + (mode === 'success' ? '%' : '')}</text></g>)}{positions.length > 0 && <><path d={path + ' L488,165 L58,165 Z'} fill={'url(#' + id + ')'} /><path d={path} fill="none" stroke="var(--brand)" strokeWidth="2.2" strokeLinejoin="round" /></>}{data.buckets.map((bucket, index) => index % Math.max(1, Math.ceil(data.buckets.length / 6)) === 0 || index === data.buckets.length - 1 ? <g key={bucket.start}><circle cx={positions[index]?.[0]} cy={positions[index]?.[1]} r="3" fill="#fff" stroke="var(--brand)" strokeWidth="1.7"><title>{formatDay(bucket.start) + ': ' + valueAt(index)}</title></circle><text x={positions[index]?.[0]} y="186" textAnchor="middle" fontSize="8" fill="var(--text-2)">{formatDay(bucket.start)}</text></g> : null)}</svg><details className="cc-chart-data"><summary>Show chart data</summary><div className="table-wrap"><table className="table"><caption className="sr-only">{label}</caption><thead><tr><th>Date</th><th>{label}</th></tr></thead><tbody>{data.buckets.map((bucket, index) => <tr key={bucket.start}><td>{formatDay(bucket.start)}</td><td>{valueAt(index)}</td></tr>)}</tbody></table></div></details></div>;
+  return <div className="cc-flow-chart"><svg viewBox="0 0 510 199" role="img" aria-label={label + ', ' + PERIOD_LABEL[period]}><defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop stopColor="#00c34c" stopOpacity=".4" /><stop offset="1" stopColor="#00c34c" stopOpacity=".03" /></linearGradient></defs>{[0, .25, .5, .75, 1].map((ratio) => <g key={ratio}><line x1="58" x2="490" y1={165 - ratio * 143} y2={165 - ratio * 143} stroke="var(--chart-grid)" /><text x="48" y={168 - ratio * 143} textAnchor="end" fontSize="9" fill="var(--text-2)">{mode === 'volume' ? formatMoney(Math.round(maximum * ratio).toString(), data.currency, { compact: true }) : Math.round(maximum * ratio) + (mode === 'success' ? '%' : '')}</text></g>)}{positions.length > 0 && <><path d={path + ' L488,165 L58,165 Z'} fill={'url(#' + id + ')'} /><path d={path} fill="none" stroke="var(--brand)" strokeWidth="2.2" strokeLinejoin="round" /></>}{data.buckets.map((bucket, index) => index % Math.max(1, Math.ceil(data.buckets.length / 6)) === 0 || index === data.buckets.length - 1 ? <g key={bucket.start}><circle cx={positions[index]?.[0]} cy={positions[index]?.[1]} r="3" fill="#fff" stroke="var(--brand)" strokeWidth="1.7"><title>{tick(bucket.start) + ': ' + valueAt(index)}</title></circle><text x={positions[index]?.[0]} y="186" textAnchor="middle" fontSize="8" fill="var(--text-2)">{tick(bucket.start)}</text></g> : null)}</svg><details className="cc-chart-data"><summary>Show chart data</summary><div className="table-wrap"><table className="table"><caption className="sr-only">{label}</caption><thead><tr><th>Date</th><th>{label}</th></tr></thead><tbody>{data.buckets.map((bucket, index) => <tr key={bucket.start}><td>{tick(bucket.start)}</td><td>{valueAt(index)}</td></tr>)}</tbody></table></div></details></div>;
 }
 function RecordSchedule({ rows }: { rows: RecordView[] }) {
   return <ul className="cc-schedule">{rows.slice(0, 3).map((row) => {
@@ -66,8 +76,9 @@ export function OverviewPage() {
   const { me, can, selection, scope } = useSession();
   const [params, setParams] = useSearchParams();
   const [flow, setFlow] = useState<FlowMode>('volume');
+  const [period, setPeriod] = useState<Period>('30d');
   const [openedPayment, setOpenedPayment] = useState<string>();
-  const query = { period: '30d' as const, currency: selection.currency, merchantId: selection.merchantId || undefined };
+  const query = { period, currency: selection.currency, merchantId: selection.merchantId || undefined };
   const key = JSON.stringify(query) + selection.legalEntityId;
   const kpis = useApi((signal) => api.kpis(query, signal), 'cc-kpis-' + key);
   const activity = useApi(can('metrics.counts.view') ? (signal) => api.activity(query, signal) : null, 'cc-activity-' + key);
@@ -99,26 +110,27 @@ export function OverviewPage() {
   const availability = services.flatMap((service) => service.availability ? [service.availability.percent] : []);
   const canAmounts = can('metrics.amounts.view');
   const canSettlements = can('area.finance') && canAmounts;
-  const volumeChange = metrics.volume?.value && metrics.volume.previous ? percentChangeMinor(metrics.volume.value, metrics.volume.previous) : null;
-  const volumeDelta = volumeChange ? volumeChange + ' vs. previous 30 days' : 'Last 30 days · ' + selection.currency;
+  const since = PERIOD_LABEL[period].replace(/^l/, 'L') + ' · ' + selection.currency;
+  const closedBalance = settlement.data ? moneyFrom(settlement.data.items.filter((row) => row.status === 'CLOSED'), 'bankReceived', selection.currency) : undefined;
+  const incoming = settlement.data ? moneyFrom(settlement.data.items.filter((row) => row.status !== 'CLOSED'), 'expectedNet', selection.currency) : undefined;
   const activeFlow = !canAmounts && flow === 'volume' ? 'transactions' : flow;
 
   return <div className="command-center">
     <div className="cc-heading"><div><h1>Global Payment Operations Command Center <span className="version-pill">v2.0</span></h1><p>Monitor, manage, and optimise payments, settlements, and financial operations across markets and payment rails.</p></div><div className="cc-activation"><Info size={16} /><strong>Production activation pending approved release gates.</strong>{can('area.qa_release') ? <ReadMore to="/release">View Gates</ReadMore> : <span className="cc-test">TEST</span>}</div></div>
-    <div className="cc-provenance"><SourceBadge source={kpis.meta?.source ?? 'fixture'} /><span>Scoped TEST records · {selection.currency} · Health is measured from local services</span></div>
+    <div className="cc-provenance"><SourceBadge source={kpis.meta?.source ?? 'fixture'} /><span>Scoped TEST records · {selection.currency} · Health is measured from local services</span><div className="cc-flow-tabs cc-period" role="group" aria-label="Date range">{(['24h', '7d', '30d'] as Period[]).map((value) => <button key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{value.toUpperCase()}</button>)}</div></div>
     {kpis.error && <ErrorState error={kpis.error} onRetry={kpis.refetch} />}
     <div className="cc-metrics">
-      <Figure label="Total Payment Volume" value={numeric(metrics.volume)} hint={metrics.volume?.restricted ? 'Amounts are outside your role' : volumeDelta} icon={Layers3} />
-      <Figure label="Total Transactions" value={count === undefined ? '—' : formatCount(count)} hint="Selected currency · last 30 days" icon={CreditCard} tone="blue" />
-      <Figure label="Success Rate" value={numeric(metrics.success_rate)} hint="Confirmed successful intents" icon={CheckCircle2} />
-      <Figure label="Dispute Rate" value="—" hint="Dispute metrics are not connected" icon={TriangleAlert} tone="red" />
-      <Figure label="Net Settlements (Test)" value={!canSettlements ? 'Restricted' : settlement.data ? formatMoney(moneyFrom(settlement.data.items, 'bankReceived', selection.currency), selection.currency) : '—'} hint="Scoped statement batches" icon={Banknote} />
-      <Figure label="Available Balance" value="—" hint="Balance source is not connected" icon={Wallet} />
+      <Figure label="Gross Volume" value={numeric(metrics.volume)} hint={metrics.volume?.restricted ? 'Amounts are outside your role' : compared(metrics.volume, period) ?? since} icon={Layers3} />
+      <Figure label="Net Volume" value={numeric(metrics.net_volume)} hint={metrics.net_volume?.restricted ? 'Amounts are outside your role' : compared(metrics.net_volume, period) ?? 'Gross minus refunds and lost disputes'} icon={Banknote} />
+      <Figure label="Total Transactions" value={count === undefined ? '—' : formatCount(count)} hint={'All statuses · ' + PERIOD_LABEL[period]} icon={CreditCard} tone="blue" />
+      <Figure label="Success Rate" value={numeric(metrics.success_rate)} hint={compared(metrics.success_rate, period) ?? 'Confirmed successful intents'} icon={CheckCircle2} />
+      <Figure label="Dispute Rate" value={metrics.dispute_rate ? numeric(metrics.dispute_rate) : '—'} hint={!metrics.dispute_rate ? 'Dispute metrics are not connected' : metrics.dispute_rate.restricted ? 'Disputes are outside your role' : compared(metrics.dispute_rate, period) ?? 'Disputes ÷ succeeded payments'} icon={TriangleAlert} tone="red" />
+      <Figure label="Balance (Test)" value={!canSettlements ? '—' : closedBalance !== undefined ? formatMoney(closedBalance, selection.currency) : '—'} hint={!canSettlements ? 'Balance source is not connected' : incoming !== undefined ? 'Incoming ' + formatMoney(incoming, selection.currency) + ' · TEST statements' : 'Closed TEST statement batches'} icon={Wallet} />
     </div>
     {params.get('view') === 'activity' && <Card className="cc-feed" title="Activity Feed" actions={<button className="btn btn-sm" onClick={() => setParams({})}>Back to Dashboard</button>}>{recent.error ? <ErrorState error={recent.error} /> : <ul className="dash-list">{recent.data?.map((item) => <li key={item.id}><span><strong>{item.title}</strong><small>{formatRelative(item.at)}</small></span>{item.resource.type === 'payment' && can('payments.read') && <button className="btn btn-sm" onClick={() => setOpenedPayment(item.resource.id)}>Inspect</button>}</li>)}</ul>}</Card>}
     <div className="cc-grid">
       <Card className="cc-flow" title={<span className="row">Payment Volume & Flow <Info size={13} className="subtle" /></span>} actions={<div className="cc-flow-tabs" role="group" aria-label="Payment flow metric">{([{ id: 'volume', label: 'Volume' }, { id: 'transactions', label: 'Transactions' }, { id: 'success', label: 'Success Rate' }] as const).map((tab) => <button key={tab.id} aria-pressed={activeFlow === tab.id} disabled={tab.id === 'volume' && !canAmounts} onClick={() => setFlow(tab.id)}>{tab.label}</button>)}</div>}>
-        {activity.error ? <ErrorState error={activity.error} onRetry={activity.refetch} /> : !can('metrics.counts.view') ? <NoPermission /> : !activity.data ? <Skeleton height={195} /> : <div className="cc-flow-body"><FlowChart data={activity.data} mode={activeFlow} /><div className="cc-currency-legend"><span className="cc-mini-caption">Requested sample amounts</span>{[...currencies].map(([currency, amount], index) => <div key={currency}><span className="dash-dot" style={{ background: colors[index % colors.length] }} /><strong>{currency}</strong><span>{canAmounts ? formatMoney(amount.toString(), currency) : 'Restricted'}</span></div>)}{!currencies.size && <p>Currency detail requires access to payment records.</p>}</div></div>}
+        {activity.error ? <ErrorState error={activity.error} onRetry={activity.refetch} /> : !can('metrics.counts.view') ? <NoPermission /> : !activity.data ? <Skeleton height={195} /> : <div className="cc-flow-body"><FlowChart data={activity.data} mode={activeFlow} period={period} /><div className="cc-currency-legend"><span className="cc-mini-caption">Requested sample amounts</span>{[...currencies].map(([currency, amount], index) => <div key={currency}><span className="dash-dot" style={{ background: colors[index % colors.length] }} /><strong>{currency}</strong><span>{canAmounts ? formatMoney(amount.toString(), currency) : 'Restricted'}</span></div>)}{!currencies.size && <p>Currency detail requires access to payment records.</p>}</div></div>}
       </Card>
       <Card className="cc-regions" title={<span className="row">Payment Activity by Region <Info size={13} className="subtle" /></span>}><div className="cc-region-body"><div className="cc-map"><img src={dots} alt="" /><Globe2 className="cc-map-glow" aria-hidden="true" /></div><ul>{[...regionCounts].map(([label, total], index) => <li key={label}><span className="dash-dot" style={{ background: colors[index % colors.length] }} /><span>{label}</span><strong>{sample.length ? (total / sample.length * 100).toFixed(1) : '0'}%</strong></li>)}</ul></div><p className="cc-panel-note">{payments.data ? 'Transaction counts in the first ' + sample.length + ' scoped records; not FX-converted volume.' : 'Regional breakdown requires permission to view payment records.'}</p></Card>
       <div className="cc-actions-column"><Card title={<>Operational Alerts <span className="cc-red">({alertCount})</span></>} actions={can('health.view') ? <ReadMore to="/operations?view=alerts" /> : undefined}><ul className="cc-alert-list">{unavailable.slice(0, 3).map((service) => <li key={service.name}><TriangleAlert size={16} /><span><strong>{humanize(service.name)}</strong> is not responding</span></li>)}{reviewAlerts.slice(0, 3).map((notice) => <li key={notice.id}><CircleAlert size={16} /><span>{notice.title}</span></li>)}</ul>{!alertCount && <p className="cc-panel-note">No alerts are visible in your current scope.</p>}</Card>

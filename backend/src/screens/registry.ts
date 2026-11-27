@@ -526,6 +526,169 @@ const requirements: ScreenDef = {
   actions: {},
 };
 
+// ------------------------------------------------- ZP-COM-001 … 006 (Stripe parity)
+// Customers, products, payment links, subscriptions, invoices and tax rates:
+// the Stripe dashboard areas that the §07 rail does not cover. Read-only
+// fixtures until a billing service owns them (OPEN_QUESTIONS: Zoiko Pay vs
+// Zoiko Billing ownership). Emails are masked, as for payments.
+const CATALOG: Record<string, [string, number][]> = {
+  ten_northwind: [["Trail Jacket", 12_900], ["Summit Pack", 8_450], ["Outfitters Club (monthly)", 1_500]],
+  ten_alder: [["Reader Plus (monthly)", 999], ["Gift Card", 2_500], ["Travel Insurance Add-on", 4_200]],
+  ten_kestrel: [["Studio Pro (monthly)", 2_900], ["Studio Team (yearly)", 29_000], ["Brand Workshop", 45_000]],
+};
+const FIRST = ["Ava", "Liam", "Mia", "Noah", "Zara", "Omar", "Ella", "Theo", "Isla", "Ravi"];
+const LAST = ["Clarke", "Moreau", "Novak", "Okoye", "Silva", "Brandt", "Kaur", "Rossi"];
+const products = (m: Merchant) => (CATALOG[m.tenantId] ?? []).map(([name, minor], j) => ({ name, minor, j, recurring: /monthly|yearly/.test(name) }));
+const customersOf = (m: Merchant, i: number) => Array.from({ length: 4 }, (_, k) => {
+  const r = rng(11_000 + i * 10 + k);
+  const first = pick(r, FIRST), last = pick(r, LAST);
+  return { id: `cus_${m.id.slice(4)}_${k + 1}`, name: `${first} ${last}`, email: `${first[0]!.toLowerCase()}••••@example.com`, k };
+});
+
+const customers: ScreenDef = {
+  id: "ZP-COM-001", title: "Customers", area: "area.payment_operations", scoped: true,
+  generate: ({ now }) => MERCHANTS.flatMap((m, i) => customersOf(m, i).map((c) => {
+    const r = rng(12_000 + i * 10 + c.k);
+    const payments = 1 + Math.floor(r() * 12);
+    const status = (i + c.k) % 7 === 3 ? "DELINQUENT" : "ACTIVE";
+    const created = now - (5 + c.k * 9 + i) * DAY;
+    return {
+      id: c.id, status, version: 1, ...scope(m),
+      fields: { name: c.name, email: c.email, merchant: m.displayName, country: country(m.legalEntityId), currency: m.currencies[0]!,
+        payments, totalSpent: money(payments * Math.round(1_000 + r() * 9_000), m.currencies[0]!), created: iso(created).slice(0, 10),
+        note: status === "DELINQUENT" ? "Has an overdue invoice" : "—" },
+      timeline: [{ at: iso(created), event: "Customer created", actor: "checkout" }],
+      updatedAt: iso(created + 2 * DAY),
+    };
+  })),
+  summary: (rows) => [
+    { label: "Customers", value: String(rows.length) },
+    { label: "Active", value: count(rows, "ACTIVE") },
+    { label: "Delinquent", value: count(rows, "DELINQUENT") },
+  ],
+  actions: {},
+};
+
+const catalogue: ScreenDef = {
+  id: "ZP-COM-002", title: "Product Catalogue", area: "area.payment_operations", scoped: true,
+  generate: ({ now }) => MERCHANTS.flatMap((m, i) => products(m).map((p) => {
+    const cur = m.currencies[0]!;
+    const created = now - (40 - i * 3 - p.j) * DAY;
+    return {
+      id: `prod_${m.id.slice(4)}_${p.j + 1}`, status: (i + p.j) % 5 === 4 ? "ARCHIVED" : "ACTIVE", version: 1, ...scope(m),
+      fields: { name: p.name, merchant: m.displayName, price: money(p.minor, cur), pricing: p.recurring ? "2 prices (monthly, yearly)" : "1 price (one-off)",
+        billing: p.recurring ? (p.name.includes("yearly") ? "Recurring · yearly" : "Recurring · monthly") : "One-off",
+        taxCode: p.recurring ? "txcd_10103001 (SaaS)" : "txcd_99999999 (General goods)", created: iso(created).slice(0, 10) },
+      timeline: [{ at: iso(created), event: "Product created", actor: people.owner.name }],
+      updatedAt: iso(created + DAY),
+    };
+  })),
+  summary: (rows) => [
+    { label: "Products", value: String(rows.length) },
+    { label: "Active", value: count(rows, "ACTIVE") },
+    { label: "Archived", value: count(rows, "ARCHIVED") },
+  ],
+  actions: {},
+};
+
+const paymentLinks: ScreenDef = {
+  id: "ZP-COM-003", title: "Payment Links", area: "area.payment_operations", scoped: true,
+  generate: ({ now }) => MERCHANTS.flatMap((m, i) => products(m).filter((p) => !p.recurring || p.j === 2).map((p) => {
+    const r = rng(13_000 + i * 10 + p.j);
+    const cur = m.currencies[0]!;
+    const paid = Math.floor(r() * 25);
+    const created = now - (20 - p.j * 4) * DAY;
+    return {
+      id: `plink_${m.id.slice(4)}_${p.j + 1}`, status: (i + p.j) % 4 === 3 ? "DEACTIVATED" : "ACTIVE", version: 1, ...scope(m),
+      fields: { url: `https://pay.zoiko.test/l/${m.id.slice(4, 10)}${p.j + 1}${(1000 + i * 37).toString(36)}`, product: p.name, merchant: m.displayName,
+        price: money(p.minor, cur), payments: paid, collected: money(paid * p.minor, cur), created: iso(created).slice(0, 10) },
+      timeline: [{ at: iso(created), event: "Payment link created", actor: people.mops.name }],
+      updatedAt: iso(created + 3 * HOUR),
+    };
+  })),
+  summary: (rows) => [
+    { label: "Links", value: String(rows.length) },
+    { label: "Active", value: count(rows, "ACTIVE") },
+    { label: "Deactivated", value: count(rows, "DEACTIVATED") },
+  ],
+  actions: {},
+};
+
+const subscriptions: ScreenDef = {
+  id: "ZP-COM-004", title: "Subscriptions", area: "area.payment_operations", scoped: true,
+  generate: ({ now }) => MERCHANTS.flatMap((m, i) => {
+    const plans = products(m).filter((p) => p.recurring);
+    return customersOf(m, i).slice(0, 3).map((c) => {
+      const plan = plans[c.k % plans.length]!;
+      const yearly = plan.name.includes("yearly");
+      const status = ["ACTIVE", "ACTIVE", "TRIALING", "PAST_DUE", "CANCELED"][(i + c.k) % 5]!;
+      const started = now - (10 + c.k * 20 + i * 3) * DAY;
+      return {
+        id: `sub_${m.id.slice(4)}_${c.k + 1}`, status, version: 1, ...scope(m),
+        fields: { customer: c.name, product: plan.name, merchant: m.displayName, amount: money(plan.minor, m.currencies[0]!), interval: yearly ? "Yearly" : "Monthly",
+          started: iso(started).slice(0, 10), currentPeriodEnd: status === "CANCELED" ? "—" : iso(now + ((c.k + i) % 27 + 1) * DAY).slice(0, 10),
+          collection: "Charge automatically", note: status === "PAST_DUE" ? "Latest invoice failed; retry scheduled" : status === "TRIALING" ? "Trial ends in 7 days" : "—" },
+        timeline: [{ at: iso(started), event: status === "TRIALING" ? "Trial started" : "Subscription started", actor: "checkout" }],
+        updatedAt: iso(started + DAY),
+      };
+    });
+  }),
+  summary: (rows) => [
+    { label: "Active", value: count(rows, "ACTIVE") },
+    { label: "Trialing", value: count(rows, "TRIALING") },
+    { label: "Past due", value: count(rows, "PAST_DUE") },
+    { label: "Canceled", value: count(rows, "CANCELED") },
+  ],
+  actions: {},
+};
+
+const invoices: ScreenDef = {
+  id: "ZP-COM-005", title: "Invoices", area: "area.payment_operations", scoped: true,
+  generate: ({ now }) => MERCHANTS.flatMap((m, i) => customersOf(m, i).map((c) => {
+    const r = rng(15_000 + i * 10 + c.k);
+    const cur = m.currencies[0]!;
+    const due = BigInt(Math.round(2_000 + r() * 40_000));
+    const status = ["PAID", "OPEN", "PAID", "DRAFT", "VOID", "UNCOLLECTIBLE", "OPEN"][(i * 4 + c.k) % 7]!;
+    const issued = now - (3 + c.k * 6 + i) * DAY;
+    return {
+      id: `in_${m.id.slice(4)}_${c.k + 1}`, status, version: 1, ...scope(m),
+      fields: { number: `${m.id.slice(4, 8).toUpperCase()}-${String(1001 + i * 10 + c.k)}`, customer: c.name, email: c.email, merchant: m.displayName,
+        amountDue: money(due, cur), amountPaid: money(status === "PAID" ? due : 0n, cur), issued: status === "DRAFT" ? "—" : iso(issued).slice(0, 10),
+        dueDate: iso(issued + 14 * DAY).slice(0, 10), source: c.k % 2 ? "Subscription" : "One-off invoice" },
+      timeline: [{ at: iso(issued), event: status === "DRAFT" ? "Draft created" : "Invoice finalised and sent", actor: people.owner.name }],
+      updatedAt: iso(issued + (status === "PAID" ? 2 * DAY : HOUR)),
+    };
+  })),
+  summary: (rows) => [
+    { label: "Open", value: count(rows, "OPEN") },
+    { label: "Paid", value: count(rows, "PAID") },
+    { label: "Draft", value: count(rows, "DRAFT") },
+    { label: "Void / uncollectible", value: count(rows, "VOID", "UNCOLLECTIBLE") },
+  ],
+  actions: {},
+};
+
+const taxRates: ScreenDef = {
+  id: "ZP-COM-006", title: "Tax Rates", area: "area.payment_operations", scoped: false,
+  generate: ({ now }) => [
+    ["txr_uk_vat_std", "cell_uk_01", "United Kingdom", "VAT", "20%", "ACTIVE"], ["txr_uk_vat_red", "cell_uk_01", "United Kingdom", "VAT (reduced)", "5%", "ACTIVE"],
+    ["txr_de_vat", "cell_eu_01", "Germany", "MwSt", "19%", "ACTIVE"], ["txr_fr_vat", "cell_eu_01", "France", "TVA", "20%", "ACTIVE"],
+    ["txr_ie_vat", "cell_eu_01", "Ireland", "VAT", "23%", "ACTIVE"], ["txr_nl_vat_old", "cell_eu_01", "Netherlands", "BTW", "21%", "ARCHIVED"],
+  ].map(([id, cell, jurisdiction, name, rate, status], i) => ({
+    id: id!, status: status!, version: 1, legalEntityId: cell, environment: "TEST" as const,
+    fields: { name: name!, jurisdiction: jurisdiction!, rate: rate!, inclusive: i % 2 === 0 ? "Inclusive" : "Exclusive", legalEntity: cell!,
+      appliesTo: "Products and invoices of merchants in this legal cell", source: "Fixture rate table (not tax advice)" },
+    timeline: [{ at: iso(now - (60 - i) * DAY), event: "Tax rate created", actor: people.finA.name }],
+    updatedAt: iso(now - (60 - i) * DAY),
+  })),
+  summary: (rows) => [
+    { label: "Active rates", value: count(rows, "ACTIVE") },
+    { label: "Archived", value: count(rows, "ARCHIVED") },
+  ],
+  actions: {},
+};
+
 export const SCREEN_DEFS: ScreenDef[] = [
   requirements, merchantApplications, capabilities, routing, connectors, refunds, settlement, payouts, investigations, regulatory, developerHub, releases,
+  customers, catalogue, paymentLinks, subscriptions, invoices, taxRates,
 ];

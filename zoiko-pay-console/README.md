@@ -51,6 +51,12 @@ Screenshots: [docs/preview/](docs/preview/). Design notes: [docs/DESIGN.md](docs
    | Access (outside §07) | 02-02 WF-002 role administration | request, approve, revoke role grants (maker-checker) |
    | Exceptional access (outside §07) | 02-02 WF-007, WF-011 (ADR 0004) | request, approve, revoke, review time-limited masked access |
    | Super Admin (outside §07) | 03-05 §10.1 coordination page | read-only: health, counts, redacted organisations |
+   | Customers & Billing (outside §07, Stripe parity) | ZP-COM-001 customers, 002 product catalogue, 003 payment links, 004 subscriptions, 005 invoices, 006 tax rates | read-only; owner of these records (Zoiko Pay or Zoiko Billing) still to be decided |
+
+   The Overview also follows the Stripe home page: a 24H / 7D / 30D date range,
+   gross and net volume (gross minus succeeded refunds and lost disputes), dispute
+   rate, and a TEST balance from closed statement batches, each compared with the
+   previous period. Balances & Accounts shows incoming, available and paid-out funds.
 
    Every screen has search, a status filter, CSV export of exactly the rows you
    may see, a detail panel with history, and loading/empty/no-permission/stale

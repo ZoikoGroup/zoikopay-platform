@@ -46,6 +46,9 @@ export const NAV: NavItem[] = [
   { key: "operations", label: "Operations", path: "/operations", icon: PlatformGlyph, group: "Platform", permission: "health.view", screens: [] },
   { key: "reports", label: "Reports & Analytics", path: "/reports", icon: AuditsGlyph, group: "Platform", permission: "overview.view", screens: [] },
   { key: "settings", label: "Settings", path: "/settings", icon: PlatformGlyph, group: "Platform", permission: "overview.view", screens: [] },
+  // Not in the §07 rail: the Stripe dashboard areas (customers, catalogue, links, billing, tax). Read-only TEST fixtures.
+  { key: "commerce", label: "Customers & Billing", path: "/commerce", icon: PaymentsGlyph, group: "Workspace", permission: "area.payment_operations",
+    screens: ["ZP-COM-001", "ZP-COM-002", "ZP-COM-003", "ZP-COM-004", "ZP-COM-005", "ZP-COM-006"] },
 ];
 
 export function isVisible(item: NavItem, me: Pick<Me, "permissions">): boolean {

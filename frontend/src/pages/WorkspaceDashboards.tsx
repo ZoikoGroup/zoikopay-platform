@@ -1,6 +1,6 @@
 import { Activity, ArrowDownToLine, ArrowRight, BarChart3, BookOpen, CalendarDays, CheckCircle2, CircleAlert, Clock3, CreditCard, FileCheck2, Flag, Globe2, Layers3, Network, Plus, RefreshCw, Search, Server, ShieldCheck, Wallet, XCircle } from 'lucide-react';
 import { useId, useState, type CSSProperties, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { Card } from '../components/Card';
 import { ActivityChart } from '../components/charts';
 import { FieldDisplay, ScreenView } from '../components/ScreenView';
@@ -107,10 +107,8 @@ export function PaymentsWorkspace({ reports = false }: { reports?: boolean }) {
   const setView = (value: string) => setParams((current) => { current.set('view', value);current.delete('screen');return current; });
   const terminal = ['SUCCEEDED', 'FAILED', 'PROCESSING', 'REQUIRES_CAPTURE'];
   const tabs = [{ id: 'overview', label: 'Overview', icon: Layers3 }, { id: 'transactions', label: 'Transactions', icon: CreditCard }, ...(can('area.refunds_disputes') ? [{ id: 'refunds', label: 'Refunds & Disputes', icon: RefreshCw }] : []), { id: 'performance', label: 'Performance', icon: BarChart3 }];
-  if (view === 'links' || view === 'recurring') return <>
-    <Heading title={view === 'links' ? 'Payment Links' : 'Recurring Payments'} description="Payment workspace" /><SandboxNote />
-    <Card title={view === 'links' ? 'Payment links are not connected' : 'Recurring payment schedules are not connected'}><p className="muted">This capability has no configured backend yet. You can create a sandbox payment intent or inspect existing transactions.</p><div className="row" style={{ marginTop: 18 }}><Action to="/payments?screen=ZP-BRW-004" icon={Plus} primary>Create Payment</Action><Action to="/payments" icon={CreditCard}>Payment Explorer</Action></div></Card>
-  </>;
+  // Old links (/payments?view=links|recurring) now open the Customers & Billing screens.
+  if (view === 'links' || view === 'recurring') return <Navigate to={'/commerce?screen=' + (view === 'links' ? 'ZP-COM-003' : 'ZP-COM-004')} replace />;
   if (reports && view === 'exports') return <><Heading title="Exports" description="Download only the scoped metrics your role may access." /><SandboxNote /><Card title="Payment Metrics" actions={<ExportMetrics kpis={kpis.data?.kpis ?? []} />}>{kpis.error ? <ErrorState error={kpis.error} onRetry={kpis.refetch} /> : <ul className="dash-list">{kpis.data?.kpis.map((item) => <li key={item.key}><span>{item.label}</span><strong>{kpiValue(item)}</strong></li>)}</ul>}</Card></>;
   return <>
     <Heading title={reports ? 'Reports & Analytics' : 'Payments – Payment Explorer'} description={reports ? 'Inspect scoped payment metrics and export the information your role permits.' : 'Search, monitor, and manage payment transactions across channels and payment methods.'}><ExportMetrics kpis={kpis.data?.kpis ?? []} /></Heading>
@@ -143,7 +141,34 @@ export function FundsWorkspace({ payoutsOnly = false }: { payoutsOnly?: boolean 
   const groups = new Map<string, number>();rows.forEach((row) => groups.set(humanize(row.status), (groups.get(humanize(row.status)) ?? 0) + 1));
   const tabs = [{ id: 'overview', label: 'Overview', icon: Layers3 }, ...(can('area.finance') ? [{ id: 'settlements', label: 'Settlements', icon: CalendarDays }, { id: 'reconciliation', label: 'Reconciliation', icon: Layers3 }, { id: 'investigations', label: 'Unknown Outcomes', icon: Search }] : []), ...(can('area.payouts') ? [{ id: 'payouts', label: 'Payouts', icon: ArrowRight }] : [])];
   const screenId = view === 'payouts' ? 'ZP-BRW-010' : view === 'investigations' ? 'ZP-BRW-011' : 'ZP-BRW-009';
-  if (view === 'balances') return <><Heading title="Balances & Accounts" description="Account evidence and funds availability for your authorized workspace." /><SandboxNote /><Card title="Authoritative balances are not connected"><p className="muted">A bank or ledger balance source has not been integrated. Statement receipts and settlement records do not establish an available balance.</p><div style={{ marginTop: 18 }}><Action to="/finance" icon={BookOpen}>View Settlement Evidence</Action></div></Card></>;
+  if (view === 'balances') {
+    // Stripe "Balances": incoming (open statement batches) and available (closed, bank-received), per currency.
+    const settled = settlement.data?.items ?? [];
+    const currencies = [...new Set(settled.map((row) => String(row.fields.settlementCurrency)))].sort();
+    const open = settled.filter((row) => row.status !== 'CLOSED');
+    const closed = settled.filter((row) => row.status === 'CLOSED');
+    const payoutRows = payouts.data?.items ?? [];
+    const paidOut = sumMoney(payoutRows.filter((row) => row.status === 'SUCCEEDED'), 'amount', selection.currency);
+    const pendingOut = sumMoney(payoutRows.filter((row) => ['REQUIRES_APPROVAL', 'READY', 'PROCESSING', 'PROVIDER_ACCEPTED'].includes(row.status)), 'amount', selection.currency);
+    return <>
+      <Heading title="Balances & Accounts" description="Incoming and available funds, and payouts to the bank, for your authorized workspace."><div className="row">{can('area.payouts') && <Action to="/payouts?screen=ZP-BRW-010" icon={ArrowRight} primary>Pay out</Action>}<Action to="/finance?screen=ZP-BRW-009" icon={BookOpen}>Statements</Action></div></Heading>
+      <SandboxNote />
+      {settlement.error && <ErrorState error={settlement.error} onRetry={settlement.refetch} />}
+      <Metrics items={[
+        { label: 'Available (Test)', value: settlement.data ? formatMoney(sumMoney(closed, 'bankReceived', selection.currency), selection.currency) : '—', hint: 'Closed batches · bank received', icon: Wallet },
+        { label: 'Incoming', value: settlement.data ? formatMoney(sumMoney(open, 'expectedNet', selection.currency), selection.currency) : '—', hint: 'Open batches · expected net', icon: Clock3, tone: 'blue' },
+        { label: 'Paid Out', value: payouts.data ? formatMoney(paidOut, selection.currency) : can('area.payouts') ? '—' : 'Restricted', hint: 'Succeeded payouts · ' + selection.currency, icon: ArrowRight },
+        { label: 'Payouts in Progress', value: payouts.data ? formatMoney(pendingOut, selection.currency) : can('area.payouts') ? '—' : 'Restricted', hint: 'Awaiting approval or bank', icon: CalendarDays, tone: 'amber' },
+      ]} />
+      <div className="dash-layout"><div className="dash-left">
+        <Card title="Balance Summary" eyebrow="Per currency · TEST statement batches" flush>{!settlement.data ? <Skeleton height={140} /> : !currencies.length ? <EmptyState title="No balances">There are no statement batches in your scope.</EmptyState> : <div className="table-wrap"><table className="table"><caption className="sr-only">Balance summary by currency</caption><thead><tr><th>Currency</th><th>Incoming</th><th>Available</th><th>Unresolved variance</th></tr></thead><tbody>{currencies.map((currency) => <tr key={currency}><td><strong>{currency}</strong></td><td className="num">{formatMoney(sumMoney(open, 'expectedNet', currency), currency)}</td><td className="num">{formatMoney(sumMoney(closed, 'bankReceived', currency), currency)}</td><td className="num">{formatMoney(sumMoney(settled, 'residual', currency), currency)}</td></tr>)}</tbody></table></div>}</Card>
+        <div style={{ marginTop: 16 }}><Card title="Recent Payouts" flush actions={can('area.payouts') ? <ViewLink to="/payouts?screen=ZP-BRW-010">View all</ViewLink> : undefined}>{can('area.payouts') ? <Queue data={payouts.data} to="/payouts?screen=ZP-BRW-010" kind="Payout" /> : <NoPermission />}</Card></div>
+      </div><aside className="dash-side">
+        <Card title="Evidence & Controls"><ul className="dash-list"><li><span>Balance source<small>Derived from TEST statements, not a ledger balance</small></span><StatusBadge status="UNVERIFIED" /></li><li><span>Payout approval<small>Maker ≠ checker, password re-entry</small></span><ShieldCheck size={18} /></li><li><span>Production payouts<small>Not enabled by this dashboard</small></span><StatusBadge status="DISABLED" /></li></ul></Card>
+        <Card title="Reports"><div className="stack"><ViewLink to="/finance?screen=ZP-BRW-009">Statements and reconciliation</ViewLink><ViewLink to="/reports?view=exports">Export metrics</ViewLink></div></Card>
+      </aside></div>
+    </>;
+  }
   return <>
     <Heading title="Funds & Payouts – Balances, Settlements & Payouts" description="Review settlement evidence, payout approvals, and reconciliation across your authorized scope." />
     <SandboxNote /><Tabs items={tabs} active={view} onChange={(value) => setParams({ view: value })} />

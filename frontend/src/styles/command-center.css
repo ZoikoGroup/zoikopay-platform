@@ -13,7 +13,7 @@
 .cc-test { margin-left: auto; border: 1px solid #bcdfc7; border-radius: 4px; font-size: 8px; padding: 1px 5px; }
 .cc-provenance { display: flex; align-items: center; gap: 9px; margin: 8px 0 12px; font-size: 8px; color: var(--text-3); }
 .cc-provenance .badge { font-size: 8px; padding: 1px 5px; }
-.cc-metrics { display: grid; grid-template-columns: 1.3fr 1fr .95fr .95fr 1.3fr 1.15fr; gap: 11px; margin-bottom: 13px; }
+.cc-metrics { display: grid; grid-template-columns: 1.2fr 1.2fr .95fr 1fr 1fr 1.2fr; gap: 11px; margin-bottom: 13px; }
 .cc-metric { position: relative; display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--line); background: linear-gradient(130deg,#fff,#f9fbff); border-radius: 10px; padding: 15px 12px 12px; min-height: 102px; box-shadow: 0 1px 3px rgba(3,27,54,.04); }
 .cc-metric:first-child { background: linear-gradient(130deg,#f0fcf3,#fff); border-color: #d0e9d9; }
 .cc-metric:last-child { background: linear-gradient(130deg,#fff,#edf6ff); }
@@ -215,3 +215,6 @@
   .header-search .input { padding-right: 8px; }
   .cc-provenance { margin-bottom: 11px; }
 }
+
+/* Date range picker beside the provenance line (Stripe "Date range"). */
+.cc-provenance .cc-period { margin-left: auto; }
