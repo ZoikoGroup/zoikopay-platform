@@ -108,6 +108,31 @@ export function overviewKpis(s: Services, ctx: CallContext, q: { period: Period;
       : { key: "fraud_rate", label: "Fraud rate", unit: "percent", value: null, previous: null, trend: [], restricted: true, restrictedReason: noCounts, definition: "" },
   ];
 
+  // Net volume and dispute rate, as on the Stripe home page. Refunds and
+  // disputes come from the ZP-BRW-008 case records in the caller's scope.
+  const cases = (w0: Window) => s.screens.rawRows("ZP-BRW-008").filter((r) => {
+    const t = Date.parse(r.updatedAt);
+    return r.tenantId && r.merchantId && r.legalEntityId && t >= w0.from && t < w0.to &&
+      inScope(pr, { tenantId: r.tenantId, merchantId: r.merchantId, legalEntityId: r.legalEntityId, environment: r.environment }) &&
+      (!q.merchantId || r.merchantId === q.merchantId);
+  });
+  const caseAmount = (f: unknown) => (f && typeof f === "object" && "minor" in f && "currency" in f && f.currency === q.currency ? String(f.minor) : "0");
+  const returned = (w0: Window) => sumMinor(cases(w0)
+    .filter((r) => (r.fields.caseType === "REFUND" && r.status === "SUCCEEDED") || (r.fields.caseType === "DISPUTE" && r.status === "LOST"))
+    .map((r) => caseAmount(r.fields.amount)));
+  const netVolume = (rows: Payment[], w0: Window) => (BigInt(volume(rows)) - BigInt(returned(w0))).toString();
+  kpis.push(amounts
+    ? { key: "net_volume", label: "Net volume", unit: "minor", currency: q.currency, value: netVolume(cur, w.current), previous: netVolume(prev, w.previous), trend: [],
+        restricted: false, definition: `Gross volume in ${q.currency} minus succeeded refunds and lost disputes in the period (Stripe "net volume").` }
+    : { key: "net_volume", label: "Net volume", unit: "minor", currency: q.currency, value: null, previous: null, trend: [],
+        restricted: true, restrictedReason: "Money amounts are not part of your role (03-05 §10.1).", definition: "" });
+  const disputeRate = (rows: Payment[], w0: Window) => pct(cases(w0).filter((r) => r.fields.caseType === "DISPUTE").length, succeeded(rows).length);
+  kpis.push(counts && hasPermission(pr, "area.refunds_disputes")
+    ? { key: "dispute_rate", label: "Dispute rate", unit: "percent", value: disputeRate(cur, w.current), previous: disputeRate(prev, w.previous), trend: [],
+        restricted: false, definition: "Disputes opened in the period ÷ succeeded payments in the period." }
+    : { key: "dispute_rate", label: "Dispute rate", unit: "percent", value: null, previous: null, trend: [], restricted: true,
+        restrictedReason: counts ? "Dispute data is limited to refund and dispute roles (ZP-BRW-008)." : noCounts, definition: "" });
+
   // Payout and settlement figures follow their own 02-02 read permissions, not
   // the general counts permission: a role sees a count only where it could
   // read the underlying records (PAYOUT.READ, LEDGER.READ).

@@ -10,6 +10,7 @@ import "./styles/layout.css";
 import "./styles/components.css";
 import "./styles/brand.css";
 import "./styles/command-center.css";
+import "./styles/parity.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

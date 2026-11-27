@@ -31,7 +31,9 @@ describe("side rail (Business Requirements 01-05 §07)", () => {
 
   it("hides items by persona", () => {
     expect(visibleNav({ permissions: POR }).map((i) => i.label)).toEqual([
-      "Overview", "Merchants", "Payment Operations", "Routing", "Partners", "Refunds & Disputes", "Finance", "Reports & Analytics", "Settings",
+      "Overview", "Merchants", "Payment Operations", "Routing", "Partners", "Refunds & Disputes", "Finance", "Reports & Analytics", "Settings", "Customers & Billing",
+      // Stripe areas with no backend yet (frontend preview, local drafts only).
+      "Billing Tools", "Payment Products", "More Products", "Money Movement", "Treasury & Capital", "Reporting Tools",
     ]);
     expect(visibleNav({ permissions: SUPER_ADMIN }).map((i) => i.label)).toEqual(["Super Admin", "Operations"]); // Super Admin page only
     expect(visibleNav({ permissions: [] })).toEqual([]);
@@ -73,8 +75,8 @@ describe("side rail (Business Requirements 01-05 §07)", () => {
   it('shows the reference section headings and keeps every authorized destination reachable', () => {
     const permissions = [...new Set(RAIL_SECTIONS.flatMap((section) => section.items.map((item) => item.permission)))];
     render(withSession(<Sidebar collapsed={false} onToggle={() => undefined} onNavigate={() => undefined} />, me(permissions)));
-    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Command Center', 'Payments', 'Funds & Payouts', 'Operations', 'Risk & Compliance', 'Reports & Analytics', 'Integrations', 'Administration']);
-    for (const label of ['Dashboard', 'Activity Feed', 'Create Payment', 'Payment Links', 'Recurring Payments', 'Balances & Accounts', 'Reconciliation', 'KYC / KYB & Onboarding', 'Webhooks', 'TOKs', 'Users & Permissions', 'Settings']) expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Command Center', 'Payments', 'Customers & Billing', 'Funds & Payouts', 'Operations', 'Risk & Compliance', 'Reports & Analytics', 'Integrations', 'Administration']);
+    for (const label of ['Dashboard', 'Activity Feed', 'Create Payment', 'Payment Links', 'Subscriptions', 'Customers', 'Invoices','Balances & Accounts', 'Reconciliation', 'KYC / KYB & Onboarding', 'Webhooks', 'TOKs', 'Users & Permissions', 'Settings']) expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
   });
 
   describe("landing page", () => {

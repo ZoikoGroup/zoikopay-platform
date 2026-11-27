@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const screenId = z.string().regex(/^ZP-BRW-0\d\d$/, "unknown screen");
+/** §07 screens (ZP-BRW-0nn) and the Stripe-parity screens (ZP-COM-0nn). */
+export const screenId = z.string().regex(/^ZP-(BRW|COM)-0\d\d$/, "unknown screen");
 export const recordId = z.string().regex(/^[A-Za-z0-9_-]{2,80}$/, "invalid record id");
 export const actionName = z.string().regex(/^[a-z_]{2,40}$/, "invalid action");
 
