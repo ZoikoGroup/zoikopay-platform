@@ -68,6 +68,7 @@ export function apiRoutes(s: Services, health: HealthMonitor, accounts: AccountA
   // permission, record scope and action rules in ScreenStore.
   r.get("/screens/:screen", c.screen);
   r.get("/screens/:screen/records/:id", c.screenRecord);
+  r.post("/screens/:screen/records", c.screenCreate);
   r.post("/screens/:screen/records/:id/actions/:action", c.screenAction);
   r.post("/sandbox/payment-intents", can("area.payment_operations"), c.sandboxIntent);
 

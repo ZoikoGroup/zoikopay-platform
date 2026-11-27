@@ -1,6 +1,6 @@
 import { Copy, Eye, RefreshCw } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
-import { LOCAL_ACTIONS, MODULES, type LocalAction } from "../screens/parity";
+import { LOCAL_ACTIONS, MODULES, SERVER_MODULES, type LocalAction } from "../screens/parity";
 import type { FieldValue } from "../types/api";
 import { recordEvent, showToast, useLocalDrafts, useLocalStatus } from "./LocalDrafts";
 
@@ -12,7 +12,7 @@ import { recordEvent, showToast, useLocalDrafts, useLocalStatus } from "./LocalD
 /** Demo buttons for one record: each changes its status in this browser only. */
 export function LocalActionButtons({ screenId, id, status, fields }: { screenId: string; id: string; status: string; fields: Record<string, FieldValue> }) {
   const { set } = useLocalStatus(screenId);
-  const actions = (MODULES[screenId]?.actions ?? LOCAL_ACTIONS[screenId] ?? []).filter((a) => a.from.includes(status) && (!a.match || a.match(fields)));
+  const actions = SERVER_MODULES.has(screenId) ? [] : (MODULES[screenId]?.actions ?? LOCAL_ACTIONS[screenId] ?? []).filter((a) => a.from.includes(status) && (!a.match || a.match(fields)));
   if (!actions.length) return null;
   const run = (a: LocalAction) => {
     if (a.to !== status) set(id, a.to);
@@ -32,7 +32,8 @@ export function LocalActionButtons({ screenId, id, status, fields }: { screenId:
 /** Applies demo status changes to a status. */
 export function useDemoStatus(screenId: string) {
   const { map } = useLocalStatus(screenId);
-  return (id: string, status: string) => map[id] ?? status;
+  const server = SERVER_MODULES.has(screenId);
+  return (id: string, status: string) => (server ? status : map[id] ?? status);
 }
 
 // ------------------------------------------------------------------ checkout

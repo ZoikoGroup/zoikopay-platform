@@ -354,6 +354,17 @@ export const MODULES: Record<string, ModuleDef> = Object.fromEntries([
     ] }),
 ].map((m) => [m.id, m]));
 
+/**
+ * Modules the console server now serves as TEST fixtures (backend/src/screens/finance.ts):
+ * they use the normal screen view, server create forms and server-checked actions
+ * (maker-checker, password re-entry) instead of browser-only demo values.
+ */
+export const SERVER_MODULES = new Set([
+  "ZP-STR-010", "ZP-STR-011", "ZP-STR-012", "ZP-STR-013", "ZP-STR-014",
+  "ZP-STR-020", "ZP-STR-021", "ZP-STR-022", "ZP-STR-023",
+  "ZP-STR-024", "ZP-STR-025", "ZP-STR-026", "ZP-STR-027",
+]);
+
 /** Sidebar/area groups for the modules (each becomes one side-rail area). */
 export const MODULE_GROUPS = {
   billing: ["ZP-STR-005", "ZP-STR-006", "ZP-STR-007", "ZP-STR-008", "ZP-STR-009"],

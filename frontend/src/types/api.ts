@@ -353,10 +353,20 @@ export interface RecordView {
   timeline?: { at: string; event: string; actor: string; note?: string }[];
 }
 
+/** A server-side "create" form (TEST fixtures); the server re-validates every value. */
+export interface CreateFormView {
+  label: string;
+  source: string;
+  allowed: boolean;
+  blockedReason?: string;
+  fields: { key: string; label: string; type: "text" | "money" | "number" | "select" | "date"; required: boolean; options?: string[]; hint?: string }[];
+}
+
 export interface ScreenList {
   screen: { id: string; title: string };
   summary: { label: string; value: string }[];
   statuses: string[];
+  create?: CreateFormView;
   total: number;
   items: RecordView[];
 }

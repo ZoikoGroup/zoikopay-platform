@@ -3,6 +3,8 @@
  * field names its Business Requirements wireframe lists (§07). The backend
  * sends the values; this file only decides presentation.
  */
+import { MODULES, SERVER_MODULES } from "./parity";
+
 export type Kind = "text" | "mono" | "money" | "status" | "date" | "list" | "map";
 
 export interface Column { key: string; label: string; kind?: Kind }
@@ -175,3 +177,9 @@ export const LAYOUTS: Record<string, ScreenLayout> = {
     ],
   },
 };
+
+// Stripe-parity finance screens served by the console server: same columns as the demo modules.
+for (const id of SERVER_MODULES) {
+  const m = MODULES[id];
+  if (m) LAYOUTS[id] = { recordNoun: m.noun, columns: m.columns, sections: [{ title: "Details", fields: [...m.columns, ...(id === "ZP-STR-025" ? [S("last4", "Card ending", "mono")] : []), S("notice", "Note")] }] };
+}

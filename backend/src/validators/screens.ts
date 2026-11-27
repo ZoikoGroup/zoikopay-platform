@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-/** §07 screens (ZP-BRW-0nn) and the Stripe-parity screens (ZP-COM-0nn). */
-export const screenId = z.string().regex(/^ZP-(BRW|COM)-0\d\d$/, "unknown screen");
+/** §07 screens (ZP-BRW-0nn), Stripe-parity screens (ZP-COM-0nn) and Stripe-parity finance screens (ZP-STR-0nn). */
+export const screenId = z.string().regex(/^ZP-(BRW|COM|STR)-0\d\d$/, "unknown screen");
 export const recordId = z.string().regex(/^[A-Za-z0-9_-]{2,80}$/, "invalid record id");
 export const actionName = z.string().regex(/^[a-z_]{2,40}$/, "invalid action");
 
@@ -9,6 +9,14 @@ export const screenQuery = z.object({
   status: z.string().regex(/^[A-Z_]{2,40}$/).optional(),
   q: z.string().trim().max(80).optional(),
 });
+
+/** A "create" form: values are strings; each screen's rule validates them on the server. */
+export const createBody = z
+  .object({
+    merchantId: z.string().regex(/^mer_[a-z0-9_]{1,60}$/),
+    values: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,40}$/), z.string().max(500)).refine((v) => Object.keys(v).length <= 30, "too many fields"),
+  })
+  .strict();
 
 export const actionBody = z
   .object({

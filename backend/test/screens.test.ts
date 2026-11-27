@@ -156,7 +156,8 @@ describe("global shell (search, notifications, audit)", () => {
     const t = setup();
     const res = await request(t.app).get("/api/v1/notifications").set("Cookie", t.loginAs("fin.controller.b"));
     expect(res.body.data.length).toBeGreaterThan(0);
-    expect(res.body.data.every((n: { screenId: string }) => n.screenId.startsWith("ZP-BRW-"))).toBe(true);
+    // §07 screens, plus Stripe-parity finance requests awaiting a second approver (ZP-STR-0nn).
+    expect(res.body.data.every((n: { screenId: string }) => /^ZP-(BRW|STR)-/.test(n.screenId))).toBe(true);
   });
 
   it("audit log is for audit roles only", async () => {

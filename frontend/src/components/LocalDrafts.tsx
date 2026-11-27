@@ -156,21 +156,37 @@ function check(f: DraftField, raw: string): string | null {
 const mask = (email: string) => `${email.slice(0, 1).toLowerCase()}••••@${(email.split("@")[1] ?? "").toLowerCase()}`;
 
 /** The "+ Create" form. Saves a local draft only; says so before and after. */
-export function CreateDialog({ spec, screenId, onClose, onCreated }: { spec: CreateSpec; screenId: string; onClose: () => void; onCreated?: (r: DraftRecord) => void }) {
+export function CreateDialog({ spec, screenId, onClose, onCreated, submit }: {
+  spec: CreateSpec; screenId: string; onClose: () => void; onCreated?: (r: DraftRecord) => void;
+  /** When given, the form is saved on the server (TEST fixtures) instead of as a local draft. */
+  submit?: (merchantId: string, values: Record<string, string>) => Promise<void>;
+}) {
   const { me, selection, scope } = useSession();
   const { add } = useLocalDrafts(screenId);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [serverError, setServerError] = useState<string>();
+  const [busy, setBusy] = useState(false);
   const merchants = scope?.merchants ?? [];
   const [merchantId, setMerchantId] = useState(selection.merchantId || merchants[0]?.id || "");
   const formId = `create-${screenId}`;
 
-  const submit = (e: FormEvent) => {
+  const save = (e: FormEvent) => {
     e.preventDefault();
     const found: Record<string, string> = {};
     for (const f of spec.fields) { const why = check(f, values[f.key] ?? ""); if (why) found[f.key] = why; }
     setErrors(found);
     if (Object.keys(found).length) return;
+    if (submit) {
+      const raw: Record<string, string> = {};
+      for (const f of spec.fields) { const v = (values[f.key] ?? "").trim(); if (v) raw[f.key] = v; }
+      setBusy(true);
+      setServerError(undefined);
+      submit(merchantId, raw).then(() => { showToast(`${spec.label}: saved (TEST)`); onClose(); }, (err: unknown) => {
+        setServerError(err instanceof Error ? err.message : "The server refused this request.");
+      }).finally(() => setBusy(false));
+      return;
+    }
     const merchant = merchants.find((m) => m.id === merchantId);
     const fields: Record<string, FieldValue> = { ...(merchant ? { merchant: merchant.displayName } : {}) };
     for (const f of spec.fields) {
@@ -194,11 +210,12 @@ export function CreateDialog({ spec, screenId, onClose, onCreated }: { spec: Cre
   return (
     <Dialog
       title={spec.label}
-      description="Saved as a local draft in this browser only. It is not sent to the server, reaches no provider and moves no money."
+      description={submit ? "Saved on the console server as a TEST record and audited. It reaches no bank or provider and moves no money." : "Saved as a local draft in this browser only. It is not sent to the server, reaches no provider and moves no money."}
       onClose={onClose}
-      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" form={formId} data-autofocus>{spec.label}</button></>}
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" form={formId} disabled={busy} data-autofocus>{busy ? "Saving…" : spec.label}</button></>}
     >
-      <form id={formId} className="stack" onSubmit={submit} noValidate>
+      <form id={formId} className="stack" onSubmit={save} noValidate>
+        {serverError && <div className="banner" data-tone="strong" role="alert"><span>{serverError}</span></div>}
         {merchants.length > 0 && (
           <div className="field">
             <label htmlFor={`${formId}-merchant`}>Merchant</label>

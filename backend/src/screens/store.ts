@@ -1,10 +1,11 @@
 import { hasPermission, inScope } from "../authorization/policy.js";
 import type { Principal } from "../authorization/principal.js";
-import type { FixtureDataset } from "../database/fixtures.js";
+import { MERCHANTS, type FixtureDataset } from "../database/fixtures.js";
 import { auditActor, type CallContext, type Services } from "../services/context.js";
 import { AppError, errors } from "../types/errors.js";
+import { toMinor } from "./fixtureKit.js";
 import { SCREEN_DEFS } from "./registry.js";
-import type { ActionRule, ScreenDef, ScreenRecord } from "./types.js";
+import type { ActionRule, CreateRule, ScreenDef, ScreenRecord } from "./types.js";
 
 /** A fresh password re-entry is valid for this long. */
 export const STEP_UP_WINDOW_SECONDS = 5 * 60;
@@ -47,6 +48,8 @@ export interface RecordView {
 export class ScreenStore {
   private readonly records = new Map<string, ScreenRecord[]>();
   private readonly defs = new Map(SCREEN_DEFS.map((d) => [d.id, d]));
+  /** Per-screen counter for ids of records created in this process. */
+  private readonly created = new Map<string, number>();
 
   constructor(base: FixtureDataset, now: number) {
     for (const d of SCREEN_DEFS) this.records.set(d.id, d.generate({ now, base }));
@@ -125,9 +128,72 @@ export class ScreenStore {
       screen: { id: d.id, title: d.title },
       summary: d.summary(rows),
       statuses: [...new Set(rows.map((r) => r.status))].sort(),
+      ...(d.create ? { create: this.createView(ctx.principal, d.create) } : {}),
       total: filtered.length,
       items: filtered.map((r) => this.view(s, ctx, d, r, false)),
     };
+  }
+
+  /** The create form and whether the caller may use it (UI hint; create() re-checks everything). */
+  private createView(p: Principal, c: CreateRule) {
+    const allowed = c.deciders.some((x) => p.personas.includes(x));
+    return {
+      label: c.label, source: c.source, allowed, ...(allowed ? {} : { blockedReason: "Your role cannot create these records." }),
+      fields: c.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: !!f.required, ...(f.options ? { options: f.options } : {}), ...(f.hint ? { hint: f.hint } : {}) })),
+    };
+  }
+
+  /** Creates one TEST record from a form. Every rule is checked here, on the server, and audited. */
+  create(s: Services, ctx: CallContext, id: string, input: { merchantId: string; values: Record<string, string> }): RecordView {
+    const d = this.def(id);
+    const p = ctx.principal;
+    const deny = (err: AppError): never => {
+      s.audit.append({ ...auditActor(ctx), action: `screen.${id}.create`, outcome: "DENIED", resource: { type: id, id: "new" }, detail: { code: err.code, why: err.detail ?? err.title } });
+      throw err;
+    };
+    const c = d.create;
+    if (!c || !d.scoped) return deny(errors.notFound("Create action"));
+    if (!this.canSeeScreen(p, d)) return deny(errors.forbidden());
+    if (p.environment !== "TEST") return deny(errors.liveUnavailable());
+    if (!c.deciders.some((x) => p.personas.includes(x))) return deny(errors.forbidden("Your role cannot create these records."));
+    const merchant = MERCHANTS.find((m) => m.id === input.merchantId);
+    if (!merchant || !inScope(p, { tenantId: merchant.tenantId, merchantId: merchant.id, legalEntityId: merchant.legalEntityId, environment: "TEST" })) {
+      return deny(new AppError(400, "VALIDATION_FAILED", "Choose a merchant", "Pick a merchant from your scope."));
+    }
+
+    const values: Record<string, string> = {};
+    for (const f of c.fields) {
+      const raw = (input.values[f.key] ?? "").trim();
+      const bad = (why: string) => deny(new AppError(400, "VALIDATION_FAILED", `Check “${f.label}”`, why));
+      if (!raw) { if (f.required) bad("This field is required."); continue; }
+      if (raw.length > 200) bad("Use at most 200 characters.");
+      if (f.type === "number" && !/^\d{1,9}$/.test(raw)) bad("Enter a whole number.");
+      if (f.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) bad("Use the format YYYY-MM-DD.");
+      if (f.type === "select" && !(f.options ?? []).includes(raw)) bad("Choose one of the listed options.");
+      if (f.type === "money") {
+        const minor = toMinor(raw);
+        if (!minor) bad("Enter a positive amount with at most two decimals, for example 12.50.");
+        values[f.key] = minor ?? "";
+        continue;
+      }
+      values[f.key] = raw;
+    }
+
+    const now = s.now();
+    const seq = (this.created.get(id) ?? 0) + 1;
+    this.created.set(id, seq);
+    const built = c.build({ values, merchant, now, seq });
+    const at = new Date(now).toISOString();
+    const r: ScreenRecord = {
+      id: built.id, status: built.status, version: 1, ...{ tenantId: merchant.tenantId, merchantId: merchant.id, legalEntityId: merchant.legalEntityId }, environment: "TEST",
+      ...(built.requested ? { requestedBySub: p.sub, requestedByName: p.displayName } : {}),
+      fields: built.fields,
+      timeline: [{ at, event: built.event, actor: p.displayName }],
+      updatedAt: at,
+    };
+    this.records.set(id, [r, ...(this.records.get(id) ?? [])]);
+    s.audit.append({ ...auditActor(ctx), action: `screen.${id}.create`, outcome: "SUCCEEDED", resource: { type: id, id: r.id }, detail: { status: r.status } });
+    return this.view(s, ctx, d, r, true);
   }
 
   get(s: Services, ctx: CallContext, id: string, recordId: string): RecordView {

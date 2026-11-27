@@ -2,12 +2,12 @@ import { Info, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { humanize } from "../services/format";
-import { MODULES } from "../screens/parity";
+import { MODULES, SERVER_MODULES } from "../screens/parity";
 import type { FieldValue } from "../types/api";
 import { ApiKeysPanel, CapitalOffer, CardVisuals, CheckoutPreview, LocalActionButtons, PricingPreview, SigmaBox, useDemoStatus } from "./DemoExtras";
 import { CreateButton, CreateDialog, useLocalDrafts } from "./LocalDrafts";
 import { Drawer } from "./Overlay";
-import { FieldDisplay } from "./ScreenView";
+import { FieldDisplay, ScreenView } from "./ScreenView";
 import { EmptyState, NotBuiltBadge } from "./States";
 import { StatusBadge } from "./StatusBadge";
 
@@ -123,6 +123,26 @@ export function ModuleView({ id }: { id: string }) {
         </Drawer>
       )}
       {creating && mod.create && <CreateDialog spec={mod.create} screenId={id} onClose={close} />}
+    </div>
+  );
+}
+
+/**
+ * A Stripe-parity page: server TEST fixtures (with a short note and any preview)
+ * where the console server provides them, otherwise browser-only demo values.
+ */
+export function ParityScreen({ id }: { id: string }) {
+  const mod = MODULES[id];
+  if (!SERVER_MODULES.has(id) || !mod) return <ModuleView id={id} />;
+  return (
+    <div className="stack" style={{ gap: "var(--s-4)" }}>
+      <div className="banner" data-tone="dashed" role="note">
+        <Info size={16} aria-hidden="true" />
+        <span><strong>TEST records from the console server.</strong> {mod.intent} Requests and approvals are checked and audited by the server; nothing reaches a bank or provider and no money moves.{mod.note ? ` ${mod.note}` : ""}</span>
+      </div>
+      {mod.extra === "sigma" && <SigmaBox />}
+      {mod.extra === "capital" && <CapitalOffer status="OFFERED" />}
+      <ScreenView screenId={id} />
     </div>
   );
 }

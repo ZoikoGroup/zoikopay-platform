@@ -74,6 +74,7 @@ export const api = {
 
   screen: (id: string, q: { status?: string; q?: string }, s?: AbortSignal) => http.get<ScreenList>(`${V1}/screens/${id}${qs(q)}`, s),
   record: (id: string, recordId: string, s?: AbortSignal) => http.get<RecordView>(`${V1}/screens/${id}/records/${encodeURIComponent(recordId)}`, s),
+  create: (id: string, body: { merchantId: string; values: Record<string, string> }) => http.post<RecordView>(`${V1}/screens/${id}/records`, body),
   act: (id: string, recordId: string, action: string, body: { version: number; reason?: string }) =>
     http.post<RecordView>(`${V1}/screens/${id}/records/${encodeURIComponent(recordId)}/actions/${action}`, body),
 

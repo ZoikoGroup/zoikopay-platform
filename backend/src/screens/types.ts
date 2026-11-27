@@ -1,6 +1,6 @@
 import type { Permission, Persona } from "../authorization/permissions.js";
 import type { FixtureDataset } from "../database/fixtures.js";
-import type { Environment } from "../types/domain.js";
+import type { Environment, Merchant } from "../types/domain.js";
 
 export interface Money {
   minor: string;
@@ -53,6 +53,39 @@ export interface ActionRule {
   effect?: (fields: ScreenRecord["fields"]) => ScreenRecord["fields"];
 }
 
+/** One input on a "create" form. Validated on the server; the UI only renders it. */
+export interface CreateField {
+  key: string;
+  label: string;
+  /** money: a positive amount in major units ("12.50"), converted exactly to minor units. */
+  type: "text" | "money" | "number" | "select" | "date";
+  options?: string[];
+  required?: boolean;
+  hint?: string;
+}
+
+/**
+ * Creates one TEST record on a screen ("Add funds", "Transfer", …). Like
+ * actions, it changes in-memory fixtures only and is audited; nothing reaches
+ * a PSP, a bank or the ledger, and no money moves (ADR 0003).
+ */
+export interface CreateRule {
+  label: string;
+  /** Personas (02-02 codes) allowed to create. */
+  deciders: Persona[];
+  fields: CreateField[];
+  source: string;
+  /** Builds the record from validated values. Money values arrive as minor-unit strings. */
+  build: (input: { values: Record<string, string>; merchant: Merchant; now: number; seq: number }) => {
+    id: string;
+    status: string;
+    fields: ScreenRecord["fields"];
+    event: string;
+    /** The creator becomes the requester, so maker-checker applies to later approval. */
+    requested: boolean;
+  };
+}
+
 export interface ScreenDef {
   id: string;
   title: string;
@@ -64,4 +97,6 @@ export interface ScreenDef {
   generate: (ctx: { now: number; base: FixtureDataset }) => ScreenRecord[];
   summary: (rows: ScreenRecord[]) => { label: string; value: string }[];
   actions: Record<string, ActionRule>;
+  /** Merchant-scoped screens only. */
+  create?: CreateRule;
 }

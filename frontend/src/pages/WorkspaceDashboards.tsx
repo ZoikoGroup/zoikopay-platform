@@ -5,7 +5,7 @@ import { Card } from '../components/Card';
 import { ActivityChart } from '../components/charts';
 import { FieldDisplay, ScreenView } from '../components/ScreenView';
 import { useLocalDrafts } from '../components/LocalDrafts';
-import { ModuleView } from '../components/ModuleView';
+import { ParityScreen } from '../components/ModuleView';
 import { PaymentDrawer, PaymentsTable } from '../components/payments';
 import { SandboxIntent } from '../components/SandboxIntent';
 import { EmptyState, ErrorState, NoPermission, Skeleton, SourceBadge } from '../components/States';
@@ -129,7 +129,7 @@ export function PaymentsWorkspace({ reports = false }: { reports?: boolean }) {
     <Heading title={reports ? 'Reports & Analytics' : 'Payments – Payment Explorer'} description={reports ? 'Inspect scoped payment metrics and export the information your role permits.' : 'Search, monitor, and manage payment transactions across channels and payment methods.'}><ExportMetrics kpis={kpis.data?.kpis ?? []} /></Heading>
     <SandboxNote />
     <Tabs items={tabs} active={view} onChange={setView} />
-    {moneyTab && can('area.finance') ? <ModuleView id={moneyTab} /> : view === 'refunds' && can('area.refunds_disputes') ? <ScreenView screenId="ZP-BRW-008" /> : <>
+    {moneyTab && can('area.finance') ? <ParityScreen id={moneyTab} /> : view === 'refunds' && can('area.refunds_disputes') ? <ScreenView screenId="ZP-BRW-008" /> : <>
       {kpis.error && <div className="dash-error"><ErrorState error={kpis.error} onRetry={kpis.refetch} /></div>}
       <Metrics items={Array.from({ length: 5 }, (_, i) => ({ label: metrics[i]?.label ?? ['Total Payment Volume', 'Successful Transactions', 'Success Rate', 'Fraud Rate', 'Pending Approvals'][i] ?? 'Metric', value: kpiValue(metrics[i]), hint: metrics[i]?.restricted ? 'Not included in your role' : 'Selected currency · ' + period.toUpperCase(), icon: icons[i] ?? Layers3, tone: ['green', 'blue', 'green', 'red', 'amber'][i] }))} />
       {view === 'transactions' ? <Card title="All Transactions" flush>{can('payments.read') ? <PaymentsTable onOpen={setPayment} selectedId={selectedPayment} /> : <NoPermission />}</Card> : <div className="dash-layout"><div className="dash-left">

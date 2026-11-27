@@ -1,14 +1,17 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeveloperBar, QuickCreateMenu, SandboxBanner } from "../layouts/ShellExtras";
 import { LAYOUTS } from "../screens/config";
 import { CREATE_FORMS, MODULE_GROUPS, MODULES } from "../screens/parity";
 import { me, withSession } from "../test/fixtures";
 import { toMinor } from "./LocalDrafts";
 import { ModuleView } from "./ModuleView";
+import { ScreenView } from "./ScreenView";
+import { api } from "../services/api";
+import type { RecordView, ScreenList } from "../types/api";
 
 beforeEach(() => localStorage.clear());
-afterEach(() => localStorage.clear());
+afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 
 describe("Stripe parity (frontend only)", () => {
   it("converts amounts to minor units exactly, without floats", () => {
@@ -77,5 +80,26 @@ describe("Stripe parity (frontend only)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByRole("menuitem", { name: "Customer" })).toHaveAttribute("href", "/commerce?screen=ZP-COM-001&create=1");
     expect(screen.queryByRole("menuitem", { name: "Add funds" })).toBeNull(); // needs area.finance
+  });
+
+  it("saves a server create form through the API instead of the browser", async () => {
+    const meta = { requestId: "t", environment: "TEST" as const, source: "fixture" as const, asOf: "2026-11-27T00:00:00Z" };
+    const list: ScreenList = {
+      screen: { id: "ZP-STR-010", title: "Top-ups" }, summary: [], statuses: [], total: 0, items: [],
+      create: { label: "Add funds", source: "", allowed: true, fields: [
+        { key: "amount", label: "Amount", type: "money", required: true },
+        { key: "source", label: "From", type: "select", required: true, options: ["Bank transfer (TEST)"] },
+      ] },
+    };
+    vi.spyOn(api, "screen").mockResolvedValue({ data: list, meta });
+    const create = vi.spyOn(api, "create").mockResolvedValue({ data: {} as RecordView, meta });
+    render(withSession(<ScreenView screenId="ZP-STR-010" />, me(["area.finance"])));
+    fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
+    expect(screen.getByText(/Saved on the console server as a TEST record/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "12.50" } });
+    fireEvent.change(screen.getByLabelText(/^From/), { target: { value: "Bank transfer (TEST)" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Add funds" }).at(-1)!);
+    expect(create).toHaveBeenCalledWith("ZP-STR-010", { merchantId: "", values: { amount: "12.50", source: "Bank transfer (TEST)" } });
+    expect(localStorage.getItem("zp.console.drafts.ZP-STR-010")).toBeNull(); // nothing saved as a local draft
   });
 });

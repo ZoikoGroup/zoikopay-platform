@@ -10,7 +10,7 @@ import { byTotalSpent, CREATE_FORMS, QUICK_VIEWS } from "../screens/parity";
 import type { ActionView, FieldValue, MoneyValue, RecordView } from "../types/api";
 import { ActionDialog } from "./ActionDialogs";
 import { LocalActionButtons, useDemoStatus } from "./DemoExtras";
-import { CreateButton, CreateDialog, DraftsTable } from "./LocalDrafts";
+import { CreateButton, CreateDialog, DraftsTable, type CreateSpec } from "./LocalDrafts";
 import { Money } from "./Money";
 import { Drawer } from "./Overlay";
 import { EmptyState, ErrorState, SourceBadge, StaleIndicator, TableSkeleton } from "./States";
@@ -162,9 +162,7 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
   const views = QUICK_VIEWS[screenId];
   const quick = views?.find((v) => v.key === viewKey);
   const demoStatus = useDemoStatus(screenId);
-  const createSpec = CREATE_FORMS[screenId];
   const [createOpen, setCreating] = useState(false);
-  const creating = !!createSpec && (createOpen || (params.get("screen") === screenId && params.get("create") === "1"));
   const closeCreate = () => {
     setCreating(false);
     setParams((p) => { p.delete("create"); return p; }, { replace: true });
@@ -172,6 +170,17 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
   const dq = useDebounced(q);
   const query = { status: status || undefined, q: dq || undefined };
   const res = useApi((s) => api.screen(screenId, query, s), `${screenId}${JSON.stringify(query)}`);
+  // A server create form (TEST fixtures) wins over a browser-only local draft form.
+  const server = res.data?.create;
+  const createSpec: CreateSpec | undefined = server
+    ? { label: server.label, prefix: screenId, status: "", fields: server.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, required: f.required, options: f.options, hint: f.hint })) }
+    : CREATE_FORMS[screenId];
+  const canCreate = !server || server.allowed;
+  const creating = !!createSpec && canCreate && (createOpen || (params.get("screen") === screenId && params.get("create") === "1"));
+  const saveOnServer = server ? async (merchantId: string, values: Record<string, string>) => {
+    await api.create(screenId, { merchantId, values });
+    res.refetch();
+  } : undefined;
   const open = params.get("screen") === screenId ? params.get("record") ?? undefined : undefined;
   const setOpen = (id?: string) => setParams((p) => {
     if (id) { p.set("screen", screenId); p.set("record", id); } else { p.delete("screen"); p.delete("record"); }
@@ -195,7 +204,7 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
           ))}
         </div>
       )}
-      {createSpec && <DraftsTable screenId={screenId} columns={layout.columns} noun={layout.recordNoun} />}
+      {createSpec && !server && <DraftsTable screenId={screenId} columns={layout.columns} noun={layout.recordNoun} />}
       <div className="card">
         {views && (
           <div className="tabs" role="tablist" aria-label={`${layout.recordNoun} views`} style={{ padding: "0 var(--s-4)" }}>
@@ -222,7 +231,7 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
             <button className="btn btn-sm" disabled={!shown.length} onClick={() => exportCsv(screenId, layout.columns, shown)}>
               <Download size={13} aria-hidden="true" /> Export CSV
             </button>
-            {createSpec && <CreateButton spec={createSpec} onClick={() => setCreating(true)} />}
+            {createSpec && (canCreate ? <CreateButton spec={createSpec} onClick={() => setCreating(true)} /> : <span className="subtle" style={{ fontSize: "var(--fs-xs)" }} title={server?.blockedReason}>{server?.blockedReason}</span>)}
           </div>
         </div>
         {res.error ? <ErrorState error={res.error} onRetry={res.refetch} /> : !d ? <TableSkeleton /> : shown.length === 0 ? (
@@ -257,7 +266,7 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
         {d && <div className="table-foot"><span>{shown.length} {layout.recordNoun}{shown.length === 1 ? "" : "s"}</span><span>Actions are checked again by the server</span></div>}
       </div>
       {open && <RecordDrawer screenId={screenId} id={open} onClose={() => setOpen(undefined)} />}
-      {creating && createSpec && <CreateDialog spec={createSpec} screenId={screenId} onClose={closeCreate} />}
+      {creating && createSpec && <CreateDialog spec={createSpec} screenId={screenId} onClose={closeCreate} submit={saveOnServer} />}
     </div>
   );
 }

@@ -10,39 +10,11 @@
  * and are audited.
  */
 import { LEGAL_ENTITIES, MERCHANTS } from "../database/fixtures.js";
-import { devUserId } from "../integrations/directory.js";
+import { FINANCE_SCREENS } from "./finance.js";
+import { DAY, HOUR, count, country, iso, money, people, pick, rng, scope } from "./fixtureKit.js";
 import type { Merchant } from "../types/domain.js";
 import type { Money, ScreenDef, ScreenRecord } from "./types.js";
 
-const DAY = 86_400_000;
-const HOUR = 3_600_000;
-
-function rng(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const pick = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)] as T;
-const iso = (ms: number) => new Date(ms).toISOString();
-const money = (minor: number | bigint | string, currency: string): Money => ({ minor: String(minor), currency });
-const people = {
-  ops: { sub: devUserId(2), name: "Rowan Hale" },
-  finA: { sub: devUserId(3), name: "Jordan Pike" },
-  finB: { sub: devUserId(4), name: "Sam Okafor" },
-  risk: { sub: devUserId(5), name: "Morgan Reyes" },
-  sec: { sub: devUserId(7), name: "Riley Ward" },
-  owner: { sub: devUserId(10), name: "Harper Vale" },
-  mops: { sub: devUserId(11), name: "Emery Holt" },
-  comp: { sub: devUserId(13), name: "Kai Brennan" },
-};
-const scope = (m: Merchant) => ({ tenantId: m.tenantId, merchantId: m.id, legalEntityId: m.legalEntityId, environment: "TEST" as const });
-const count = (rows: ScreenRecord[], ...statuses: string[]) => String(rows.filter((r) => statuses.includes(r.status)).length);
-const country = (cell: string) => (cell === "cell_uk_01" ? "United Kingdom" : "European Union");
 
 // ---------------------------------------------------------------- ZP-BRW-002
 const merchantApplications: ScreenDef = {
@@ -691,4 +663,5 @@ const taxRates: ScreenDef = {
 export const SCREEN_DEFS: ScreenDef[] = [
   requirements, merchantApplications, capabilities, routing, connectors, refunds, settlement, payouts, investigations, regulatory, developerHub, releases,
   customers, catalogue, paymentLinks, subscriptions, invoices, taxRates,
+  ...FINANCE_SCREENS,
 ];
