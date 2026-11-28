@@ -12,6 +12,7 @@
 import { LEGAL_ENTITIES, MERCHANTS } from "../database/fixtures.js";
 import { BILLING_SCREENS } from "./billing.js";
 import { DEVELOPER_SCREENS } from "./developers.js";
+import { PRODUCT_SCREENS } from "./products.js";
 import { FINANCE_SCREENS } from "./finance.js";
 import { DAY, HOUR, count, country, iso, money, people, pick, rng, scope } from "./fixtureKit.js";
 import type { Persona } from "../authorization/permissions.js";
@@ -819,6 +820,22 @@ const taxRates: ScreenDef = {
     archive: routine("Archive tax rate", ["ACTIVE"], "ARCHIVED", { deciders: ["MFIN", "POR"] }),
     unarchive: routine("Unarchive", ["ARCHIVED"], "ACTIVE", { deciders: ["MFIN", "POR"] }),
   },
+  create: {
+    label: "Create tax rate", deciders: ["MFIN", "POR"],
+    source: "Tax rate for the chosen merchant's legal cell (TEST fixture, not tax advice).",
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true, hint: "For example VAT" },
+      { key: "jurisdiction", label: "Jurisdiction", type: "select", required: true, options: COUNTRIES },
+      { key: "rate", label: "Rate (%)", type: "text", required: true, hint: "For example 20 or 7.25" },
+      { key: "inclusive", label: "Inclusive or exclusive", type: "select", required: true, options: ["Inclusive", "Exclusive"] },
+    ],
+    check: ({ values }) => (/^\d{1,2}(\.\d{1,2})?$/.test(values.rate ?? "") && Number(values.rate) > 0 ? null : "Enter a rate between 0 and 100, for example 20 or 7.25."),
+    build: ({ values, merchant, now, seq }) => ({
+      id: `txr_${merchant.legalEntityId.replace("cell_", "")}_n${seq}`, status: "ACTIVE", requested: false, event: "Tax rate created",
+      fields: { name: values.name ?? "", jurisdiction: values.jurisdiction ?? "", rate: `${values.rate ?? ""}%`, inclusive: values.inclusive ?? "", legalEntity: merchant.legalEntityId,
+        appliesTo: "Products and invoices of merchants in this legal cell", source: `Created ${iso(now).slice(0, 10)} (TEST fixture, not tax advice)` },
+    }),
+  },
 };
 
 export const SCREEN_DEFS: ScreenDef[] = [
@@ -827,4 +844,5 @@ export const SCREEN_DEFS: ScreenDef[] = [
   ...FINANCE_SCREENS,
   ...BILLING_SCREENS,
   ...DEVELOPER_SCREENS,
+  ...PRODUCT_SCREENS,
 ];

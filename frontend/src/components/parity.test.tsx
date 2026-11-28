@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeveloperBar, QuickCreateMenu, SandboxBanner } from "../layouts/ShellExtras";
 import { LAYOUTS } from "../screens/config";
-import { CREATE_FORMS, MODULE_GROUPS, MODULES } from "../screens/parity";
+import { CREATE_FORMS, MODULE_GROUPS, MODULES, SERVER_MODULES } from "../screens/parity";
 import { me, withSession } from "../test/fixtures";
 import { toMinor } from "./LocalDrafts";
 import { ModuleView } from "./ModuleView";
@@ -47,15 +47,13 @@ describe("Stripe parity (frontend only)", () => {
     expect(localStorage.getItem("zp.console.drafts.ZP-STR-032")).toContain("coupon.created");
   });
 
-  it("shows demo values and applies a demo action in this browser only", () => {
-    // Agentic commerce has no server screen yet, so it keeps browser-only demo values.
+  it("serves every Stripe-parity page from the console server, so no browser-only demo action remains", () => {
+    for (const ids of Object.values(MODULE_GROUPS)) for (const id of ids) expect(SERVER_MODULES.has(id), id).toBe(true);
+    // A server-backed page never offers a browser-only demo action, even when the demo row is shown.
     render(withSession(<ModuleView id="ZP-STR-017" />, me(["area.payment_operations"])));
-    expect(screen.getByText("Shopping assistant")).toBeInTheDocument();
-    expect(screen.getAllByText("DEMO").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("Shopping assistant"));
-    fireEvent.click(screen.getByRole("button", { name: "Disable" }));
-    expect(localStorage.getItem("zp.console.status.ZP-STR-017")).toBe(JSON.stringify({ agt_shop: "DISABLED" }));
-    expect(screen.queryByRole("button", { name: "Disable" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Demo actions" })).toBeNull();
+    expect(localStorage.getItem("zp.console.status.ZP-STR-017")).toBeNull();
   });
 
   it("gives every module demo values", () => {

@@ -1,3 +1,4 @@
+import { setupProgress } from "../services/preferences.js";
 import type { Request, Response } from "express";
 import { parse } from "../middleware/http.js";
 import { auditActor, type Services } from "../services/context.js";
@@ -14,7 +15,7 @@ import { xaAction, xaActionBody, xaId, xaListQuery, xaPaymentsQuery, xaRequestBo
 import { paymentId as paymentIdSchema } from "../validators/payments.js";
 import { AppError } from "../types/errors.js";
 import { paymentId, paymentListQuery } from "../validators/payments.js";
-import { actionBody, actionName, auditQuery, createBody, recordId, sandboxBody, screenId, screenQuery, searchQuery } from "../validators/screens.js";
+import { actionBody, actionName, auditQuery, createBody, preferenceBody, preferenceSection, recordId, sandboxBody, screenId, screenQuery, searchQuery } from "../validators/screens.js";
 import { environmentBody, overviewQuery } from "../validators/session.js";
 import { ctxOf, ok } from "./respond.js";
 
@@ -52,6 +53,10 @@ export function apiController(s: Services, health: HealthMonitor, notifications:
       ok(req, res, s.screens.list(s, ctxOf(req), parse(screenId, req.params.screen), parse(screenQuery, req.query)), "fixture", asOf()),
     screenRecord: (req: Request, res: Response) =>
       ok(req, res, s.screens.get(s, ctxOf(req), parse(screenId, req.params.screen), parse(recordId, req.params.id)), "fixture", asOf()),
+    preferences: (req: Request, res: Response) => ok(req, res, s.preferences.get(ctxOf(req)), "console"),
+    setPreferences: (req: Request, res: Response) =>
+      ok(req, res, s.preferences.set(s, ctxOf(req), parse(preferenceSection, req.params.section), parse(preferenceBody, req.body)), "console"),
+    setupProgress: (req: Request, res: Response) => ok(req, res, setupProgress(s, ctxOf(req)), "console"),
     screenCreate: (req: Request, res: Response) =>
       ok(req, res, s.screens.create(s, ctxOf(req), parse(screenId, req.params.screen), parse(createBody, req.body)), "fixture", asOf(), 201),
     screenAction: (req: Request, res: Response) =>

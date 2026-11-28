@@ -1,3 +1,4 @@
+import type { PreferenceStore } from "./preferences.js";
 import type { Principal } from "../authorization/principal.js";
 import type { ConsoleDataSource } from "../database/dataSource.js";
 import type { MembershipDirectory } from "../integrations/directory.js";
@@ -16,6 +17,8 @@ export interface Services {
   /** Exceptional access grants (ADR 0004). */
   exceptional: ExceptionalAccessStore;
   screens: ScreenStore;
+  /** Per-user settings (TEST, in memory). */
+  preferences: PreferenceStore;
   now: () => number;
 }
 

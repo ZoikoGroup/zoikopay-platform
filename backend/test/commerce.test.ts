@@ -142,3 +142,52 @@ describe("developer workbench on the server (TEST fixtures)", () => {
     expect(sent.body.data.status).toBe("ACTIVE");
   });
 });
+
+describe("payment products and other products on the server (TEST fixtures)", () => {
+  const IDS = ["ZP-STR-015", "ZP-STR-016", "ZP-STR-017", "ZP-STR-018", "ZP-STR-019", "ZP-STR-028", "ZP-STR-029", "ZP-STR-030", "ZP-STR-031"];
+  it("serves every product page to Customers & Billing roles", async () => {
+    const t = setup();
+    for (const id of IDS) {
+      const res = await t.list(t.loginAs("merchant.ops"), id);
+      expect(res.status, id).toBe(200);
+      expect((res.body.data.items as Row[]).length, id).toBeGreaterThan(0);
+    }
+    expect((await t.list(t.loginAs("merchant.viewer"), "ZP-STR-015")).status).toBe(403);
+  });
+
+  it("completes a checkout session without creating a payment", async () => {
+    const t = setup();
+    const ops = t.loginAs("merchant.ops");
+    const before = (await request(t.app).get("/api/v1/payments?pageSize=1").set("Cookie", ops)).body.data.total as number;
+    expect((await t.create(ops, "ZP-STR-015", { merchantId: M, values: { mode: "Payment", amount: "29", successUrl: "http://plain.example" } })).status).toBe(409);
+    const s = (await t.create(ops, "ZP-STR-015", { merchantId: M, values: { mode: "Payment", amount: "29", successUrl: "https://shop.example/thanks" } })).body.data as Row;
+    expect(s.status).toBe("OPEN");
+    const done = (await t.act(ops, "ZP-STR-015", s.id, "simulate_payment", { version: s.version })).body.data as Row;
+    expect(done.status).toBe("COMPLETE");
+    expect(String(done.fields.notice)).toContain("no payment is created");
+    const after = (await request(t.app).get("/api/v1/payments?pageSize=1").set("Cookie", ops)).body.data.total as number;
+    expect(after).toBe(before); // the console never creates payments
+  });
+
+  it("verifies an identity session and files a company", async () => {
+    const t = setup();
+    const ops = t.loginAs("merchant.ops");
+    const vs = (await t.create(ops, "ZP-STR-028", { merchantId: M, values: { type: "ID number", reference: "user_77" } })).body.data as Row;
+    expect((await t.act(ops, "ZP-STR-028", vs.id, "verify", { version: vs.version })).body.data.status).toBe("VERIFIED");
+    const co = (await t.create(ops, "ZP-STR-031", { merchantId: M, values: { company: "Acme Labs Ltd", jurisdiction: "Ireland" } })).body.data as Row;
+    const filed = (await t.act(ops, "ZP-STR-031", co.id, "file", { version: co.version })).body.data as Row;
+    expect(filed.status).toBe("FILED");
+    expect((await t.act(ops, "ZP-STR-031", co.id, "incorporate", { version: filed.version })).body.data.status).toBe("INCORPORATED");
+  });
+
+  it("creates a tax rate for the chosen merchant's legal cell, with a valid rate only", async () => {
+    const t = setup();
+    const op = t.loginAs("ops.agent");
+    expect((await t.create(op, "ZP-COM-006", { merchantId: M, values: { name: "VAT", jurisdiction: "Germany", rate: "abc", inclusive: "Inclusive" } })).status).toBe(409);
+    const r = await t.create(op, "ZP-COM-006", { merchantId: M, values: { name: "VAT (reduced)", jurisdiction: "United Kingdom", rate: "7.25", inclusive: "Inclusive" } });
+    expect(r.status).toBe(201);
+    expect(r.body.data.fields).toMatchObject({ rate: "7.25%", legalEntity: "cell_uk_01" });
+    expect(r.body.data.merchantId).toBeUndefined(); // a platform-level record, not a merchant's
+    expect((await t.create(t.loginAs("merchant.ops"), "ZP-COM-006", { merchantId: M, values: { name: "VAT", jurisdiction: "Germany", rate: "19", inclusive: "Inclusive" } })).status).toBe(403);
+  });
+});

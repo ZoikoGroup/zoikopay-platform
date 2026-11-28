@@ -70,6 +70,11 @@ export const api = {
   accessAction: (grantId: string, action: string, body: { version: number; reason?: string; expiresAt?: string }) =>
     http.post<AccessMember>(`${V1}/access/grants/${encodeURIComponent(grantId)}/actions/${action}`, body),
 
+  preferences: (s?: AbortSignal) => http.get<Record<string, Record<string, string>>>(`${V1}/preferences`, s),
+  setPreferences: (section: "personal" | "branding" | "portal", values: Record<string, string>) =>
+    request<Record<string, string>>("PUT", `${V1}/preferences/${section}`, values),
+  setupProgress: (s?: AbortSignal) => http.get<Record<string, boolean>>(`${V1}/setup-progress`, s),
+
   reauth: (password: string) => http.post<{ stepUpValidUntil: string }>("/auth/reauth", { password }),
 
   screen: (id: string, q: { status?: string; q?: string }, s?: AbortSignal) => http.get<ScreenList>(`${V1}/screens/${id}${qs(q)}`, s),

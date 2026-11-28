@@ -133,6 +133,7 @@ export function ModuleView({ id }: { id: string }) {
  */
 export function ParityScreen({ id }: { id: string }) {
   const mod = MODULES[id];
+  const [version, setVersion] = useState(0);
   if (!SERVER_MODULES.has(id) || !mod) return <ModuleView id={id} />;
   return (
     <div className="stack" style={{ gap: "var(--s-4)" }}>
@@ -143,7 +144,8 @@ export function ParityScreen({ id }: { id: string }) {
       {mod.extra === "sigma" && <SigmaBox />}
       {mod.extra === "capital" && <CapitalOffer status="OFFERED" />}
       {mod.extra === "pricing" && <PricingPreview />}
-      <ScreenView screenId={id} />
+      {mod.extra === "checkout" && <CheckoutPreview onServerDone={() => setVersion((v) => v + 1)} />}
+      <ScreenView key={version} screenId={id} />
     </div>
   );
 }

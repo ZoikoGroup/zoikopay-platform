@@ -74,6 +74,10 @@ export function apiRoutes(s: Services, health: HealthMonitor, accounts: AccountA
 
   r.get("/search", can("overview.view"), c.search);
   r.get("/notifications", c.notifications);
+  // Per-user settings and setup-guide progress (TEST, in memory; the caller's own only).
+  r.get("/preferences", c.preferences);
+  r.put("/preferences/:section", c.setPreferences);
+  r.get("/setup-progress", c.setupProgress);
   r.post("/notifications/:id/read", c.markNotificationRead);
   r.get("/audit", can("area.audits"), c.audit);
 

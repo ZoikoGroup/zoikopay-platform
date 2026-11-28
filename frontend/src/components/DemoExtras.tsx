@@ -1,5 +1,7 @@
 import { Copy, Eye, RefreshCw } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
+import { useSession } from "../hooks/useSession";
+import { api } from "../services/api";
 import { LOCAL_ACTIONS, MODULES, SERVER_MODULES, type LocalAction } from "../screens/parity";
 import type { FieldValue } from "../types/api";
 import { recordEvent, showToast, useLocalDrafts, useLocalStatus } from "./LocalDrafts";
@@ -37,8 +39,10 @@ export function useDemoStatus(screenId: string) {
 }
 
 // ------------------------------------------------------------------ checkout
-export function CheckoutPreview() {
+export function CheckoutPreview({ onServerDone }: { onServerDone?: () => void } = {}) {
   const { add } = useLocalDrafts("ZP-STR-015");
+  const { selection, scope } = useSession();
+  const server = SERVER_MODULES.has("ZP-STR-015");
   const [card, setCard] = useState("4242 4242 4242 4242");
   const [email, setEmail] = useState("test.buyer@example.com");
   const [result, setResult] = useState<{ ok: boolean; text: string }>();
@@ -48,6 +52,18 @@ export function CheckoutPreview() {
     const digits = card.replace(/\s/g, "");
     if (!/^\d{16}$/.test(digits)) { setResult({ ok: false, text: "Enter a 16-digit test card number." }); return; }
     const declined = digits.endsWith("0002") || digits.endsWith("9995");
+    const merchantId = selection.merchantId || scope?.merchants[0]?.id || "";
+    if (server) {
+      // A real TEST checkout session on the console server; a declined card leaves it open.
+      api.create("ZP-STR-015", { merchantId, values: { mode: "Subscription", amount: "29.00", successUrl: "https://kestrel.example/thanks" } })
+        .then((r) => declined ? r : api.act("ZP-STR-015", r.data.id, "simulate_payment", { version: r.data.version }))
+        .then(() => {
+          setResult(declined ? { ok: false, text: digits.endsWith("9995") ? "Declined: insufficient funds. The session stays open. Try 4242 4242 4242 4242." : "Your card was declined. The session stays open. Try 4242 4242 4242 4242." }
+            : { ok: true, text: "Payment succeeded. The completed session is listed below (TEST: no payment record is created)." });
+          onServerDone?.();
+        }, () => setResult({ ok: false, text: "The server refused this checkout. Check that your role can use Payment Products." }));
+      return;
+    }
     const now = new Date();
     const id = `cs_demo_${now.getTime().toString(36)}`;
     add({ id, status: declined ? "EXPIRED" : "COMPLETE", fields: { merchant: "Kestrel Studio UK", mode: "Subscription", amount: { minor: "2900", currency: "GBP" }, successUrl: "https://kestrel.example/thanks" }, createdAt: now.toISOString(), createdBy: email });

@@ -1,3 +1,4 @@
+import { PreferenceStore } from "./services/preferences.js";
 import express, { type Express } from "express";
 import session, { MemoryStore, type Store } from "express-session";
 import helmet from "helmet";
@@ -48,6 +49,7 @@ export function createApp(deps: AppDeps): { app: Express; services: Services; he
     directory: deps.directory ?? access,
     access,
     exceptional: new ExceptionalAccessStore(now),
+    preferences: new PreferenceStore(),
     now,
   };
   const health = deps.health ?? new HealthMonitor(config.goServices, config.oidc.issuer, log);

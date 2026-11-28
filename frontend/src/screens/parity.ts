@@ -16,15 +16,8 @@ const C = (key: string, label: string, kind: Kind = "text"): Column => ({ key, l
 const isMoney = (v: FieldValue | undefined): v is { minor: string; currency: string } =>
   !!v && typeof v === "object" && !Array.isArray(v) && "minor" in v && "currency" in v;
 
-const COUNTRIES = ["United Kingdom", "Germany", "France", "Ireland", "Netherlands", "Spain", "United States"];
 
 export const CREATE_FORMS: Record<string, CreateSpec> = {
-  "ZP-COM-006": { label: "Create tax rate", prefix: "txr", status: "ACTIVE", fields: [
-    { key: "name", label: "Name", type: "text", required: true, hint: "For example VAT" },
-    { key: "jurisdiction", label: "Jurisdiction", type: "select", required: true, options: COUNTRIES },
-    { key: "rate", label: "Rate (%)", type: "number", required: true },
-    { key: "inclusive", label: "Inclusive or exclusive", type: "select", required: true, options: ["Inclusive", "Exclusive"] },
-  ] },
 };
 
 export interface QuickView {
@@ -338,7 +331,11 @@ export const SERVER_BILLING = new Set([
 ]);
 /** Developer workbench (backend/src/screens/developers.ts). */
 export const SERVER_DEVELOPERS = new Set(["ZP-STR-032", "ZP-STR-033", "ZP-STR-034"]);
-export const SERVER_MODULES = new Set([...SERVER_FINANCE, ...SERVER_BILLING, ...SERVER_DEVELOPERS]);
+/** Payment products and other products (backend/src/screens/products.ts). */
+export const SERVER_PRODUCTS = new Set([
+  "ZP-STR-015", "ZP-STR-016", "ZP-STR-017", "ZP-STR-018", "ZP-STR-019", "ZP-STR-028", "ZP-STR-029", "ZP-STR-030", "ZP-STR-031",
+]);
+export const SERVER_MODULES = new Set([...SERVER_FINANCE, ...SERVER_BILLING, ...SERVER_DEVELOPERS, ...SERVER_PRODUCTS]);
 
 /** Sidebar/area groups for the modules (each becomes one side-rail area). */
 export const MODULE_GROUPS = {

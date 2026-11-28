@@ -18,6 +18,10 @@ export const createBody = z
   })
   .strict();
 
+/** One settings section: string values only; the section's own rules validate them. */
+export const preferenceSection = z.enum(["personal", "branding", "portal"]);
+export const preferenceBody = z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,40}$/), z.string().max(300)).refine((v) => Object.keys(v).length <= 20, "too many fields");
+
 export const actionBody = z
   .object({
     version: z.number().int().min(1),

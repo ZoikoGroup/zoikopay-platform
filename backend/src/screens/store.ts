@@ -154,7 +154,7 @@ export class ScreenStore {
       throw err;
     };
     const c = d.create;
-    if (!c || !d.scoped) return deny(errors.notFound("Create action"));
+    if (!c) return deny(errors.notFound("Create action"));
     if (!this.canSeeScreen(p, d)) return deny(errors.forbidden());
     if (p.environment !== "TEST") return deny(errors.liveUnavailable());
     if (!c.deciders.some((x) => p.personas.includes(x))) return deny(errors.forbidden("Your role cannot create these records."));
@@ -191,7 +191,8 @@ export class ScreenStore {
     const built = c.build({ values, merchant, now, seq, base: this.base });
     const at = new Date(now).toISOString();
     const r: ScreenRecord = {
-      id: built.id, status: built.status, version: 1, ...{ tenantId: merchant.tenantId, merchantId: merchant.id, legalEntityId: merchant.legalEntityId }, environment: "TEST",
+      // Platform-level screens (for example tax rates) belong to the merchant's legal cell, not to the merchant.
+      id: built.id, status: built.status, version: 1, ...(d.scoped ? { tenantId: merchant.tenantId, merchantId: merchant.id } : {}), legalEntityId: merchant.legalEntityId, environment: "TEST",
       ...(built.requested ? { requestedBySub: p.sub, requestedByName: p.displayName } : {}),
       fields: built.fields,
       timeline: [{ at, event: built.event, actor: p.displayName }],

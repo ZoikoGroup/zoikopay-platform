@@ -104,6 +104,6 @@ export interface ScreenDef {
   generate: (ctx: { now: number; base: FixtureDataset }) => ScreenRecord[];
   summary: (rows: ScreenRecord[]) => { label: string; value: string }[];
   actions: Record<string, ActionRule>;
-  /** Merchant-scoped screens only. */
+  /** On a platform-level screen the record belongs to the chosen merchant's legal cell. */
   create?: CreateRule;
 }

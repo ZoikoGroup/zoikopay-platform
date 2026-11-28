@@ -2,6 +2,8 @@ import { ChevronDown, ChevronUp, CircleCheck, Circle, Plus, SquareTerminal } fro
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { useDismiss } from "../hooks/ui";
+import { useApi } from "../hooks/useApi";
+import { api } from "../services/api";
 import { useSession } from "../hooks/useSession";
 import type { Permission } from "../types/api";
 
@@ -20,10 +22,10 @@ export function SandboxBanner() {
 // --------------------------------------------------------------- Setup guide
 interface Step { key: string; label: string; to: string; permission: Permission }
 const STEPS: Step[] = [
-  { key: "details", label: "Review your account details", to: "/settings", permission: "overview.view" },
+  { key: "details", label: "Add your contact details", to: "/settings", permission: "overview.view" },
   { key: "bank", label: "Link a bank account", to: "/treasury?screen=ZP-STR-027&create=1", permission: "area.finance" },
-  { key: "apikey", label: "Find your API keys", to: "/developers?screen=ZP-BRW-013", permission: "area.developers" },
-  { key: "webhook", label: "Review webhook endpoints", to: "/developers?view=webhooks", permission: "area.developers" },
+  { key: "apikey", label: "Create an API key", to: "/workbench?screen=ZP-STR-034&create=1", permission: "area.developers" },
+  { key: "webhook", label: "Add a webhook endpoint", to: "/developers?screen=ZP-BRW-013&create=1", permission: "area.developers" },
   { key: "product", label: "Create your first product", to: "/commerce?screen=ZP-COM-002&create=1", permission: "area.payment_operations" },
   { key: "payment", label: "Try a test payment", to: "/payments?screen=ZP-BRW-004", permission: "area.payment_operations" },
 ];
@@ -51,7 +53,10 @@ function Ring({ done, total }: { done: number; total: number }) {
 export function SetupGuide() {
   const { can } = useSession();
   const [open, setOpen] = useState(false);
-  const [done, setDone] = useState<string[]>(readDone);
+  const [manual, setDone] = useState<string[]>(readDone);
+  // Steps the server sees you have already done (your own successful actions).
+  const progress = useApi((signal) => api.setupProgress(signal), 'setup-progress-' + String(open));
+  const done = [...new Set([...manual, ...Object.entries(progress.data ?? {}).filter(([, v]) => v).map(([k]) => k)])];
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(ref, open, () => setOpen(false));
   const steps = STEPS.filter((s) => can(s.permission));

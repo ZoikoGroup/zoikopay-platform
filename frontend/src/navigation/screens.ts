@@ -5,6 +5,7 @@
  * the 02-02 codes the backend enforces.
  */
 import { MODULES, SERVER_DEVELOPERS, SERVER_FINANCE, SERVER_MODULES } from "../screens/parity";
+// Billing tools and product pages share the Customers & Billing roles (MOPS, MFIN, POR).
 
 export interface ScreenSpec {
   id: string;
