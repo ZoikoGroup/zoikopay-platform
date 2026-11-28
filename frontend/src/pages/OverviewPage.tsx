@@ -130,6 +130,8 @@ export function OverviewPage() {
   const notices = useApi((signal) => api.notifications(signal), 'cc-tasks', { refreshMs: 60000 });
   const settlement = useApi(can('area.finance') ? (signal) => api.screen('ZP-BRW-009', {}, signal) : null, 'cc-settlement-' + key);
   const payouts = useApi(can('area.payouts') ? (signal) => api.screen('ZP-BRW-010', {}, signal) : null, 'cc-payouts-' + key);
+  const topups = useApi(can('area.finance') ? (signal) => api.screen('ZP-STR-010', {}, signal) : null, 'cc-topups-' + key);
+  const transfers = useApi(can('area.finance') ? (signal) => api.screen('ZP-STR-011', {}, signal) : null, 'cc-transfers-' + key);
   const recent = useApi((signal) => api.recentActivity(signal), 'cc-recent');
   const devHub = useApi(can('area.developers') ? (signal) => api.screen('ZP-BRW-013', {}, signal) : null, 'cc-keys-' + key);
   const [hidden, setHidden] = useState<string[]>(() => readList(HIDDEN_KEY));
@@ -159,7 +161,10 @@ export function OverviewPage() {
   const canAmounts = can('metrics.amounts.view');
   const canSettlements = can('area.finance') && canAmounts;
   const since = PERIOD_LABEL[period].replace(/^l/, 'L') + ' · ' + selection.currency;
-  const closedBalance = settlement.data ? moneyFrom(settlement.data.items.filter((row) => row.status === 'CLOSED'), 'bankReceived', selection.currency) : undefined;
+  // Bank received on closed TEST batches + approved TEST top-ups − paid TEST transfers (exact BigInt arithmetic).
+  const closedBalance = settlement.data ? (BigInt(moneyFrom(settlement.data.items.filter((row) => row.status === 'CLOSED'), 'bankReceived', selection.currency))
+    + BigInt(moneyFrom((topups.data?.items ?? []).filter((row) => row.status === 'SUCCEEDED'), 'amount', selection.currency))
+    - BigInt(moneyFrom((transfers.data?.items ?? []).filter((row) => row.status === 'PAID'), 'amount', selection.currency))).toString() : undefined;
   const incoming = settlement.data ? moneyFrom(settlement.data.items.filter((row) => row.status !== 'CLOSED'), 'expectedNet', selection.currency) : undefined;
   const activeFlow = !canAmounts && flow === 'volume' ? 'transactions' : flow;
 

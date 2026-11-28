@@ -82,6 +82,11 @@ function AutomaticPayoutsCard() {
   </Card>;
 }
 
+/** Exact sum of minor-unit strings (BigInt, no floats). */
+function addMinor(...values: string[]): string {
+  return values.reduce((total, value) => total + BigInt(value), 0n).toString();
+}
+
 function sumMoney(rows: RecordView[], field: string, currency: string): string {
   return rows.reduce((total, row) => {
     const value = row.fields[field];
@@ -154,6 +159,10 @@ export function FundsWorkspace({ payoutsOnly = false }: { payoutsOnly?: boolean 
   const view = params.get('view') ?? 'overview';
   const settlement = useApi(can('area.finance') ? (signal) => api.screen('ZP-BRW-009', {}, signal) : null, 'funds-settlements');
   const payouts = useApi(can('area.payouts') ? (signal) => api.screen('ZP-BRW-010', {}, signal) : null, 'funds-payouts');
+  // TEST money movement from the console server: approved top-ups add to Available, paid transfers subtract from it.
+  const onBalances = view === 'balances' && can('area.finance');
+  const topups = useApi(onBalances ? (signal) => api.screen('ZP-STR-010', {}, signal) : null, 'funds-topups');
+  const transfers = useApi(onBalances ? (signal) => api.screen('ZP-STR-011', {}, signal) : null, 'funds-transfers');
   const source = payoutsOnly ? payouts : settlement;
   const rows = source.data?.items ?? [];
   const groups = new Map<string, number>();rows.forEach((row) => groups.set(humanize(row.status), (groups.get(humanize(row.status)) ?? 0) + 1));
@@ -168,22 +177,33 @@ export function FundsWorkspace({ payoutsOnly = false }: { payoutsOnly?: boolean 
     const payoutRows = payouts.data?.items ?? [];
     const paidOut = sumMoney(payoutRows.filter((row) => row.status === 'SUCCEEDED'), 'amount', selection.currency);
     const pendingOut = sumMoney(payoutRows.filter((row) => ['REQUIRES_APPROVAL', 'READY', 'PROCESSING', 'PROVIDER_ACCEPTED'].includes(row.status)), 'amount', selection.currency);
+    const topupRows = topups.data?.items ?? [];
+    const transferRows = transfers.data?.items ?? [];
+    const toppedUp = (currency: string) => sumMoney(topupRows.filter((row) => row.status === 'SUCCEEDED'), 'amount', currency);
+    const transferred = (currency: string) => sumMoney(transferRows.filter((row) => row.status === 'PAID'), 'amount', currency);
+    const available = (currency: string) => addMinor(sumMoney(closed, 'bankReceived', currency), toppedUp(currency), '-' + transferred(currency));
+    const waiting = topupRows.filter((row) => row.status === 'REQUIRES_APPROVAL').length + transferRows.filter((row) => row.status === 'REQUIRES_APPROVAL').length;
+    const allCurrencies = [...new Set([...currencies, ...[...topupRows, ...transferRows].map((row) => { const v = row.fields.amount; return v && typeof v === 'object' && !Array.isArray(v) && 'currency' in v ? String(v.currency) : ''; }).filter(Boolean)])].sort();
     return <>
       <Heading title="Balances & Accounts" description="Incoming and available funds, and payouts to the bank, for your authorized workspace."><div className="row" style={{ flexWrap: 'wrap' }}>{can('area.payouts') && <Action to="/payouts?screen=ZP-BRW-010" icon={ArrowRight} primary>Pay out</Action>}{can('area.finance') && <><Action to="/money?screen=ZP-STR-010&create=1" icon={Plus}>Add funds</Action><Action to="/money?screen=ZP-STR-011&create=1" icon={ArrowRight}>Transfer</Action><Action to="/money?screen=ZP-STR-014" icon={CalendarDays}>Manage payouts</Action><Action to="/money?screen=ZP-STR-013&create=1" icon={Globe2}>Add settlement currency</Action></>}<Action to="/finance?screen=ZP-BRW-009" icon={BookOpen}>Statements</Action></div></Heading>
       <SandboxNote />
       {settlement.error && <ErrorState error={settlement.error} onRetry={settlement.refetch} />}
       <Metrics items={[
-        { label: 'Available (Test)', value: settlement.data ? formatMoney(sumMoney(closed, 'bankReceived', selection.currency), selection.currency) : '—', hint: 'Closed batches · bank received', icon: Wallet },
-        { label: 'Incoming', value: settlement.data ? formatMoney(sumMoney(open, 'expectedNet', selection.currency), selection.currency) : '—', hint: 'Open batches · expected net', icon: Clock3, tone: 'blue' },
+        { label: 'Available (Test)', value: settlement.data ? formatMoney(available(selection.currency), selection.currency) : '—', hint: 'Bank received + approved top-ups − paid transfers', icon: Wallet },
+        { label: 'Incoming', value: settlement.data ? formatMoney(sumMoney(open, 'expectedNet', selection.currency), selection.currency) : '—', hint: waiting ? `Open batches · ${waiting} money request${waiting === 1 ? '' : 's'} awaiting approval` : 'Open batches · expected net', icon: Clock3, tone: 'blue' },
         { label: 'Paid Out', value: payouts.data ? formatMoney(paidOut, selection.currency) : can('area.payouts') ? '—' : 'Restricted', hint: 'Succeeded payouts · ' + selection.currency, icon: ArrowRight },
         { label: 'Payouts in Progress', value: payouts.data ? formatMoney(pendingOut, selection.currency) : can('area.payouts') ? '—' : 'Restricted', hint: 'Awaiting approval or bank', icon: CalendarDays, tone: 'amber' },
       ]} />
       <div className="dash-layout"><div className="dash-left">
-        <Card title="Balance Summary" eyebrow="Per currency · TEST statement batches" flush>{!settlement.data ? <Skeleton height={140} /> : !currencies.length ? <EmptyState title="No balances">There are no statement batches in your scope.</EmptyState> : <div className="table-wrap"><table className="table"><caption className="sr-only">Balance summary by currency</caption><thead><tr><th>Currency</th><th>Incoming</th><th>Available</th><th>Unresolved variance</th></tr></thead><tbody>{currencies.map((currency) => <tr key={currency}><td><strong>{currency}</strong></td><td className="num">{formatMoney(sumMoney(open, 'expectedNet', currency), currency)}</td><td className="num">{formatMoney(sumMoney(closed, 'bankReceived', currency), currency)}</td><td className="num">{formatMoney(sumMoney(settled, 'residual', currency), currency)}</td></tr>)}</tbody></table></div>}</Card>
+        <Card title="Balance Summary" eyebrow="Per currency · TEST statements and money movement" flush>{!settlement.data ? <Skeleton height={140} /> : !allCurrencies.length ? <EmptyState title="No balances">There are no statement batches in your scope.</EmptyState> : <div className="table-wrap"><table className="table"><caption className="sr-only">Balance summary by currency</caption><thead><tr><th>Currency</th><th>Incoming</th><th>Bank received</th><th>Top-ups</th><th>Transfers</th><th>Available</th><th>Unresolved variance</th></tr></thead><tbody>{allCurrencies.map((currency) => <tr key={currency}><td><strong>{currency}</strong></td><td className="num">{formatMoney(sumMoney(open, 'expectedNet', currency), currency)}</td><td className="num">{formatMoney(sumMoney(closed, 'bankReceived', currency), currency)}</td><td className="num">+{formatMoney(toppedUp(currency), currency)}</td><td className="num">−{formatMoney(transferred(currency), currency)}</td><td className="num"><strong>{formatMoney(available(currency), currency)}</strong></td><td className="num">{formatMoney(sumMoney(settled, 'residual', currency), currency)}</td></tr>)}</tbody></table></div>}</Card>
         <div style={{ marginTop: 16 }}><Card title="Recent Payouts" flush actions={can('area.payouts') ? <ViewLink to="/payouts?screen=ZP-BRW-010">View all</ViewLink> : undefined}>{can('area.payouts') ? <Queue data={payouts.data} to="/payouts?screen=ZP-BRW-010" kind="Payout" /> : <NoPermission />}</Card></div>
       </div><aside className="dash-side">
         <AutomaticPayoutsCard />
-        <Card title="Evidence & Controls"><ul className="dash-list"><li><span>Balance source<small>Derived from TEST statements, not a ledger balance</small></span><StatusBadge status="UNVERIFIED" /></li><li><span>Payout approval<small>Maker ≠ checker, password re-entry</small></span><ShieldCheck size={18} /></li><li><span>Production payouts<small>Not enabled by this dashboard</small></span><StatusBadge status="DISABLED" /></li></ul></Card>
+        {can('area.finance') && <Card title="Money Movement" actions={<ViewLink to="/money">Open</ViewLink>}><ul className="dash-list">
+          <li><span>Top-ups awaiting approval<small>Approved top-ups add to Available</small></span><strong className="num">{topups.data ? topupRows.filter((row) => row.status === 'REQUIRES_APPROVAL').length : '—'}</strong></li>
+          <li><span>Transfers awaiting approval<small>Paid transfers subtract from Available</small></span><strong className="num">{transfers.data ? transferRows.filter((row) => row.status === 'REQUIRES_APPROVAL').length : '—'}</strong></li>
+        </ul></Card>}
+        <Card title="Evidence & Controls"><ul className="dash-list"><li><span>Balance source<small>TEST statements and TEST money movement, not a ledger balance</small></span><StatusBadge status="UNVERIFIED" /></li><li><span>Payout approval<small>Maker ≠ checker, password re-entry</small></span><ShieldCheck size={18} /></li><li><span>Production payouts<small>Not enabled by this dashboard</small></span><StatusBadge status="DISABLED" /></li></ul></Card>
         <Card title="Reports"><div className="stack"><ViewLink to="/finance?screen=ZP-BRW-009">Statements and reconciliation</ViewLink><ViewLink to="/reports?view=exports">Export metrics</ViewLink></div></Card>
       </aside></div>
     </>;
