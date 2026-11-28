@@ -1,5 +1,6 @@
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, ShieldAlert, Undo2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { useApi } from "../hooks/useApi";
 import { useDebounced } from "../hooks/ui";
 import { useSession } from "../hooks/useSession";
@@ -8,7 +9,9 @@ import { formatDateTime, formatDateTimeFull, humanize, shortId } from "../servic
 import { INTENT_STATUSES, type EvidenceEvent, type Payment } from "../types/api";
 import { LocalActionButtons, useDemoStatus } from "./DemoExtras";
 import { Money } from "./Money";
-import { Drawer } from "./Overlay";
+import { Dialog, Drawer } from "./Overlay";
+import { showToast } from "./LocalDrafts";
+import { ApiError } from "../services/http";
 import { ErrorState, EmptyState, SourceBadge, StaleIndicator, TableSkeleton } from "./States";
 import { StatusBadge, StatusGlyph } from "./StatusBadge";
 
@@ -164,9 +167,68 @@ function PaymentRow({ p, compact, selected, onOpen }: { p: Payment; compact?: bo
 }
 
 /** Evidence drawer: one payment's facts and its evidence timeline, each with provenance. */
+/** "12345" minor units → "123.45" (two-decimal display currency; exact, no floats). */
+function toMajor(minor: string): string {
+  const v = BigInt(minor);
+  return `${v / 100n}.${String(v % 100n).padStart(2, "0")}`;
+}
+
+/**
+ * Stripe's "Refund" on a payment: raises a TEST refund case on the server
+ * (ZP-BRW-008). An independent reviewer approves it with a password; nothing
+ * reaches a provider and no money moves.
+ */
+function RefundDialog({ payment, onClose }: { payment: { id: string; merchantId: string; amountMinor: string; currency: string }; onClose: () => void }) {
+  const [amount, setAmount] = useState(toMajor(payment.amountMinor));
+  const [reason, setReason] = useState("requested_by_customer");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [created, setCreated] = useState<string>();
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{1,13}(\.\d{1,2})?$/.test(amount.trim())) { setError("Enter an amount such as 12.50."); return; }
+    setBusy(true);
+    setError(undefined);
+    api.create("ZP-BRW-008", { merchantId: payment.merchantId, values: { paymentId: payment.id, amount: amount.trim(), reason } })
+      .then((r) => { setCreated(r.data.id); showToast("Refund requested (TEST)"); })
+      .catch((err: unknown) => setError(err instanceof ApiError ? `${err.title}. ${err.detail ?? ""}` : "The server refused this request."))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <Dialog
+      title="Request refund"
+      description={`Payment ${payment.id}. The refund waits for another person to approve it with their password. TEST only: no provider call, no money moves.`}
+      onClose={onClose}
+      footer={created ? <><Link className="btn" to={`/refunds?screen=ZP-BRW-008&record=${encodeURIComponent(created)}`} onClick={onClose}>Open refund</Link><button className="btn btn-primary" onClick={onClose}>Done</button></>
+        : <><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" form="refund-form" disabled={busy} data-autofocus>{busy ? "Requesting…" : "Request refund"}</button></>}
+    >
+      {created ? (
+        <div className="banner" role="status"><span><strong>Refund requested.</strong> Case <span className="mono">{created}</span> is waiting for approval in Refunds &amp; Disputes.</span></div>
+      ) : (
+        <form id="refund-form" className="stack" onSubmit={submit} noValidate>
+          <div className="field" data-invalid={!!error}>
+            <label htmlFor="refund-amount">Refund amount · {payment.currency}</label>
+            <input id="refund-amount" className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <span className="subtle" style={{ fontSize: "var(--fs-xs)" }}>At most the amount not yet refunded. The server checks this.</span>
+          </div>
+          <div className="field">
+            <label htmlFor="refund-reason">Reason</label>
+            <select id="refund-reason" className="select" value={reason} onChange={(e) => setReason(e.target.value)}>
+              {["requested_by_customer", "duplicate", "fraudulent", "product_unavailable"].map((r) => <option key={r} value={r}>{humanize(r)}</option>)}
+            </select>
+          </div>
+          {error && <div className="banner" data-tone="strong" role="alert"><span>{error}</span></div>}
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
 export function PaymentDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const res = useApi((s) => api.payment(id, s), id);
   const statusOf = useDemoStatus("ZP-BRW-005");
+  const { can } = useSession();
+  const [refunding, setRefunding] = useState(false);
   const p = res.data;
   return (
     <Drawer
@@ -200,6 +262,12 @@ export function PaymentDrawer({ id, onClose }: { id: string; onClose: () => void
             </dl>
           </section>
 
+          {p.status === "SUCCEEDED" && can("area.refunds_disputes") && (
+            <div className="row" style={{ flexWrap: "wrap" }}>
+              <button className="btn btn-primary btn-sm" onClick={() => setRefunding(true)}><Undo2 size={13} aria-hidden="true" /> Request refund</button>
+              <span className="subtle" style={{ fontSize: "var(--fs-xs)" }}>A second person approves it in Refunds &amp; Disputes (TEST).</span>
+            </div>
+          )}
           <LocalActionButtons screenId="ZP-BRW-005" id={p.id} status={statusOf(p.id, p.status)} fields={{}} />
 
           <hr className="divider" />
@@ -233,6 +301,7 @@ export function PaymentDrawer({ id, onClose }: { id: string; onClose: () => void
           </section>
         </>
       )}
+      {refunding && p && <RefundDialog payment={p} onClose={() => setRefunding(false)} />}
     </Drawer>
   );
 }

@@ -42,12 +42,12 @@ function approval(to: string, what: string): Record<string, ActionRule> {
       source: `${what}: requester cannot approve; password re-entry. ${NOTICE}`, effect: (f) => ({ ...f, notice: NOTICE }) },
     reject: { label: "Reject", from: ["REQUIRES_APPROVAL"], to: "REJECTED", deciders: CHECKERS, separation: true, reasonRequired: true, stepUp: false,
       source: `${what}: reason mandatory for refusal` },
-    cancel: { label: "Cancel request", from: ["REQUIRES_APPROVAL"], to: "CANCELED", deciders: MAKERS, separation: false, reasonRequired: true, stepUp: false,
+    cancel: { label: "Cancel request", from: ["REQUIRES_APPROVAL"], to: "CANCELED", deciders: MAKERS, separation: false, reasonRequired: true, stepUp: false, quiet: true,
       source: `${what}: the requester may withdraw it before approval` },
   };
 }
 const toggle = (name: string, label: string, from: string, to: string, deciders: Persona[] = CHECKERS): Record<string, ActionRule> => ({
-  [name]: { label, from: [from], to, deciders, separation: false, reasonRequired: false, stepUp: false, source: "TEST fixture setting" },
+  [name]: { label, from: [from], to, deciders, separation: false, reasonRequired: false, stepUp: false, quiet: true, source: "TEST fixture setting" },
 });
 /** A create rule whose record waits for a second person. */
 const request = (label: string, prefix: string, fields: CreateRule["fields"], build: (v: Record<string, string>, m: Merchant) => ScreenRecord["fields"],
@@ -158,7 +158,7 @@ const issuing: ScreenDef = {
   actions: {
     activate: { label: "Activate", from: ["INACTIVE"], to: "ACTIVE", deciders: CHECKERS, separation: true, reasonRequired: false, stepUp: true, source: `Card activation: the requester cannot activate it. ${NOTICE}` },
     ...toggle("freeze", "Freeze", "ACTIVE", "INACTIVE", MAKERS),
-    cancel_card: { label: "Cancel card", from: ["ACTIVE", "INACTIVE"], to: "CANCELED", deciders: CHECKERS, separation: false, reasonRequired: true, stepUp: false, source: "Card cancellation: reason mandatory" },
+    cancel_card: { label: "Cancel card", from: ["ACTIVE", "INACTIVE"], to: "CANCELED", deciders: CHECKERS, separation: false, reasonRequired: true, stepUp: false, quiet: true, source: "Card cancellation: reason mandatory" },
   },
   create: request("Create card", "ic", [
     { key: "cardholder", label: "Cardholder", type: "text", required: true },
@@ -185,7 +185,7 @@ const financialConnections: ScreenDef = {
     { institution: nth(["Northwind Bank", "Harbour Bank", "Kestrel Savings"], i), last4: String(6789 - i * 311).slice(-4) }, now - (100 - i * 7) * DAY, "Bank account linked (TEST)", people.finA.name, people.finA)),
   summary: (rows) => [{ label: "Linked", value: count(rows, "ACTIVE") }, { label: "Disconnected", value: count(rows, "DISCONNECTED") }],
   actions: {
-    disconnect: { label: "Disconnect", from: ["ACTIVE"], to: "DISCONNECTED", deciders: MAKERS, separation: false, reasonRequired: true, stepUp: false, source: "Unlinking a bank account: reason mandatory" },
+    disconnect: { label: "Disconnect", from: ["ACTIVE"], to: "DISCONNECTED", deciders: MAKERS, separation: false, reasonRequired: true, stepUp: false, quiet: true, source: "Unlinking a bank account: reason mandatory" },
   },
   create: request("Link bank account", "fca", [
     { key: "institution", label: "Bank name", type: "text", required: true },

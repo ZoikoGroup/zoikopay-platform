@@ -329,6 +329,8 @@ export interface MoneyValue {
 export type FieldValue = string | number | boolean | null | MoneyValue | string[] | Record<string, string>;
 
 export interface ActionView {
+  /** Routine action (archive, pause, …): not shown as a "next step". */
+  quiet?: boolean;
   name: string;
   label: string;
   reasonRequired: boolean;

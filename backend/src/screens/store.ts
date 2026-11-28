@@ -24,6 +24,8 @@ export interface ActionView {
   allowed: boolean;
   /** Why not, in plain words. */
   blockedReason?: string;
+  /** Routine action: the UI does not show it as a "next step". */
+  quiet?: boolean;
 }
 
 export interface RecordView {
@@ -51,7 +53,7 @@ export class ScreenStore {
   /** Per-screen counter for ids of records created in this process. */
   private readonly created = new Map<string, number>();
 
-  constructor(base: FixtureDataset, now: number) {
+  constructor(private readonly base: FixtureDataset, now: number) {
     for (const d of SCREEN_DEFS) this.records.set(d.id, d.generate({ now, base }));
   }
 
@@ -99,7 +101,7 @@ export class ScreenStore {
     const p = ctx.principal;
     const actions = Object.entries(d.actions).map(([name, rule]) => {
       const why = this.check(p, rule, r);
-      return { name, label: rule.label, reasonRequired: rule.reasonRequired, stepUp: rule.stepUp, source: rule.source, allowed: why === null,
+      return { name, label: rule.label, reasonRequired: rule.reasonRequired, stepUp: rule.stepUp, source: rule.source, allowed: why === null, ...(rule.quiet ? { quiet: true } : {}),
         ...(why ? { blockedReason: why.detail ?? why.title } : {}) };
     });
     return {
@@ -168,6 +170,7 @@ export class ScreenStore {
       if (!raw) { if (f.required) bad("This field is required."); continue; }
       if (raw.length > 200) bad("Use at most 200 characters.");
       if (f.type === "number" && !/^\d{1,9}$/.test(raw)) bad("Enter a whole number.");
+      if (f.type === "email" && !/^[^\s@]{1,64}@[^\s@]{1,120}\.[a-z]{2,24}$/i.test(raw)) bad("Enter a valid email address.");
       if (f.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) bad("Use the format YYYY-MM-DD.");
       if (f.type === "select" && !(f.options ?? []).includes(raw)) bad("Choose one of the listed options.");
       if (f.type === "money") {
@@ -179,10 +182,13 @@ export class ScreenStore {
       values[f.key] = raw;
     }
 
+    const refusal = c.check?.({ values, merchant, base: this.base, rows: this.records.get(id) ?? [] });
+    if (refusal) return deny(new AppError(409, "INVALID_STATE", "Request not possible", refusal));
+
     const now = s.now();
     const seq = (this.created.get(id) ?? 0) + 1;
     this.created.set(id, seq);
-    const built = c.build({ values, merchant, now, seq });
+    const built = c.build({ values, merchant, now, seq, base: this.base });
     const at = new Date(now).toISOString();
     const r: ScreenRecord = {
       id: built.id, status: built.status, version: 1, ...{ tenantId: merchant.tenantId, merchantId: merchant.id, legalEntityId: merchant.legalEntityId }, environment: "TEST",
@@ -244,7 +250,7 @@ export class ScreenStore {
     for (const d of SCREEN_DEFS) {
       if (!this.canSeeScreen(ctx.principal, d)) continue;
       for (const r of this.rows(s, ctx, d)) {
-        const act = Object.values(d.actions).find((rule) => rule.label !== "Run simulation" && this.check(ctx.principal, rule, r) === null);
+        const act = Object.values(d.actions).find((rule) => !rule.quiet && rule.label !== "Run simulation" && this.check(ctx.principal, rule, r) === null);
         if (act) out.push({ screenId: d.id, recordId: r.id, label: `${d.title}: ${act.label.toLowerCase()} needed`, at: r.updatedAt });
       }
     }

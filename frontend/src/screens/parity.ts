@@ -19,39 +19,6 @@ const isMoney = (v: FieldValue | undefined): v is { minor: string; currency: str
 const COUNTRIES = ["United Kingdom", "Germany", "France", "Ireland", "Netherlands", "Spain", "United States"];
 
 export const CREATE_FORMS: Record<string, CreateSpec> = {
-  "ZP-COM-001": { label: "Add customer", prefix: "cus", status: "ACTIVE", fields: [
-    { key: "name", label: "Name", type: "text", required: true },
-    { key: "email", label: "Email", type: "email", required: true, hint: "Shown masked, like every customer email." },
-    { key: "country", label: "Country", type: "select", options: COUNTRIES },
-    { key: "note", label: "Description", type: "text" },
-  ] },
-  "ZP-COM-002": { label: "Create product", prefix: "prod", status: "ACTIVE", fields: [
-    { key: "name", label: "Name", type: "text", required: true },
-    { key: "price", label: "Price", type: "money", required: true },
-    { key: "billing", label: "Billing", type: "select", required: true, options: ["One-off", "Recurring · monthly", "Recurring · yearly"] },
-    { key: "taxCode", label: "Tax code", type: "select", options: ["txcd_10103001 (SaaS)", "txcd_99999999 (General goods)", "txcd_10202000 (Downloadable software)"] },
-  ] },
-  "ZP-COM-003": { label: "Create payment link", prefix: "plink", status: "ACTIVE", fields: [
-    { key: "product", label: "Product", type: "text", required: true },
-    { key: "price", label: "Price", type: "money", required: true },
-  ] },
-  "ZP-COM-004": { label: "Create subscription", prefix: "sub", status: "ACTIVE", fields: [
-    { key: "customer", label: "Customer", type: "text", required: true },
-    { key: "product", label: "Product", type: "text", required: true },
-    { key: "amount", label: "Amount per interval", type: "money", required: true },
-    { key: "interval", label: "Interval", type: "select", required: true, options: ["Monthly", "Yearly"] },
-    { key: "started", label: "Start date", type: "date" },
-  ] },
-  "ZP-COM-005": { label: "Create invoice", prefix: "in", status: "DRAFT", fields: [
-    { key: "customer", label: "Customer", type: "text", required: true },
-    { key: "email", label: "Customer email", type: "email", required: true },
-    { key: "amountDue", label: "Amount due", type: "money", required: true },
-    { key: "dueDate", label: "Due date", type: "date", required: true },
-  ] },
-  "ZP-BRW-013": { label: "Add endpoint", prefix: "we", status: "ACTIVE", fields: [
-    { key: "value", label: "Endpoint URL", type: "url", required: true },
-    { key: "name", label: "Description", type: "text", required: true, hint: "For example Payments events" },
-  ] },
   "ZP-COM-006": { label: "Create tax rate", prefix: "txr", status: "ACTIVE", fields: [
     { key: "name", label: "Name", type: "text", required: true, hint: "For example VAT" },
     { key: "jurisdiction", label: "Jurisdiction", type: "select", required: true, options: COUNTRIES },
@@ -359,11 +326,19 @@ export const MODULES: Record<string, ModuleDef> = Object.fromEntries([
  * they use the normal screen view, server create forms and server-checked actions
  * (maker-checker, password re-entry) instead of browser-only demo values.
  */
-export const SERVER_MODULES = new Set([
+/** Finance screens (backend/src/screens/finance.ts): money requests need a second approver. */
+export const SERVER_FINANCE = new Set([
   "ZP-STR-010", "ZP-STR-011", "ZP-STR-012", "ZP-STR-013", "ZP-STR-014",
   "ZP-STR-020", "ZP-STR-021", "ZP-STR-022", "ZP-STR-023",
   "ZP-STR-024", "ZP-STR-025", "ZP-STR-026", "ZP-STR-027",
 ]);
+/** Billing tools (backend/src/screens/billing.ts). */
+export const SERVER_BILLING = new Set([
+  "ZP-STR-001", "ZP-STR-002", "ZP-STR-003", "ZP-STR-004", "ZP-STR-005", "ZP-STR-006", "ZP-STR-007", "ZP-STR-008", "ZP-STR-009",
+]);
+/** Developer workbench (backend/src/screens/developers.ts). */
+export const SERVER_DEVELOPERS = new Set(["ZP-STR-032", "ZP-STR-033", "ZP-STR-034"]);
+export const SERVER_MODULES = new Set([...SERVER_FINANCE, ...SERVER_BILLING, ...SERVER_DEVELOPERS]);
 
 /** Sidebar/area groups for the modules (each becomes one side-rail area). */
 export const MODULE_GROUPS = {
@@ -536,20 +511,9 @@ for (const [id, d] of Object.entries(DEMO)) { const m = MODULES[id]; if (m) Obje
 
 /** Demo actions on records that come from the server (status changes stay in this browser). */
 export const LOCAL_ACTIONS: Record<string, LocalAction[]> = {
-  "ZP-COM-002": [on("Archive product", "ACTIVE", "ARCHIVED", { emit: "product.updated" }), on("Unarchive", "ARCHIVED", "ACTIVE", { emit: "product.updated" })],
-  "ZP-COM-003": [on("Deactivate link", "ACTIVE", "DEACTIVATED", { emit: "payment_link.updated" }), on("Activate link", "DEACTIVATED", "ACTIVE", { emit: "payment_link.updated" })],
-  "ZP-COM-004": [{ label: "Cancel subscription", from: ["ACTIVE", "TRIALING", "PAST_DUE"], to: "CANCELED", danger: true, emit: "customer.subscription.deleted" }],
-  "ZP-COM-005": [
-    on("Finalise and send", "DRAFT", "OPEN", { emit: "invoice.finalized" }),
-    on("Mark as paid", "OPEN", "PAID", { emit: "invoice.paid" }),
-    on("Void invoice", "OPEN", "VOID", { danger: true, emit: "invoice.voided" }),
-    on("Mark uncollectible", "OPEN", "UNCOLLECTIBLE", { emit: "invoice.marked_uncollectible" }),
-  ],
-  "ZP-COM-006": [on("Archive tax rate", "ACTIVE", "ARCHIVED"), on("Unarchive", "ARCHIVED", "ACTIVE")],
-  "ZP-BRW-013": [{ label: "Send test event", from: ["ACTIVE", "FAILING"], to: "ACTIVE", emit: "payment_intent.succeeded", toast: "Test event delivered: 200 OK (demo)", match: (f) => f.kind === "Webhook endpoint" }],
+  // ZP-COM-002 … 006 actions now run on the console server (TEST fixtures).
   // Payments (ZP-BRW-005) use the payment drawer's own demo buttons.
   "ZP-BRW-005": [
-    on("Refund (demo)", "SUCCEEDED", "REFUNDED", { danger: true, emit: "charge.refunded" }),
     on("Capture (demo)", "REQUIRES_CAPTURE", "SUCCEEDED", { emit: "payment_intent.succeeded" }),
   ],
 };

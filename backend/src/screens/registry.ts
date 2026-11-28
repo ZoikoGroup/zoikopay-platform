@@ -10,10 +10,13 @@
  * and are audited.
  */
 import { LEGAL_ENTITIES, MERCHANTS } from "../database/fixtures.js";
+import { BILLING_SCREENS } from "./billing.js";
+import { DEVELOPER_SCREENS } from "./developers.js";
 import { FINANCE_SCREENS } from "./finance.js";
 import { DAY, HOUR, count, country, iso, money, people, pick, rng, scope } from "./fixtureKit.js";
+import type { Persona } from "../authorization/permissions.js";
 import type { Merchant } from "../types/domain.js";
-import type { Money, ScreenDef, ScreenRecord } from "./types.js";
+import type { ActionRule, Money, ScreenDef, ScreenRecord } from "./types.js";
 
 
 // ---------------------------------------------------------------- ZP-BRW-002
@@ -240,6 +243,39 @@ const refunds: ScreenDef = {
       source: "ZP-BRW-008: step-up / dual control; amount ≤ remaining refundable" },
     reject: { label: "Reject", from: ["REQUESTED"], to: "REJECTED", deciders: ["POR"], separation: true, reasonRequired: true, stepUp: false, source: "ZP-BRW-008 review panel" },
   },
+  // "Refund" from a payment (Stripe's payment page): raises a TEST refund case that
+  // then follows the same review (another person approves, password re-entry).
+  create: {
+    label: "Request refund", deciders: ["MOPS", "MFIN", "POR"],
+    source: "ZP-BRW-008: refund request; an independent reviewer approves with password re-entry. TEST fixture: no provider call, no money moves.",
+    fields: [
+      { key: "paymentId", label: "Payment", type: "text", required: true },
+      { key: "amount", label: "Refund amount", type: "money", required: true },
+      { key: "reason", label: "Reason", type: "select", required: true, options: ["requested_by_customer", "duplicate", "fraudulent", "product_unavailable"] },
+    ],
+    check: ({ values, merchant, base, rows }) => {
+      const p = base.payments.find((x) => x.id === values.paymentId);
+      if (!p || p.merchantId !== merchant.id || p.environment !== "TEST") return "No such payment for this merchant.";
+      if (p.status !== "SUCCEEDED") return "Only a succeeded payment can be refunded.";
+      const open = rows.filter((r) => r.fields.paymentId === p.id && r.fields.caseType === "REFUND" && !["REJECTED"].includes(r.status));
+      const already = open.reduce((t, r) => t + BigInt((r.fields.amount as Money).minor), 0n);
+      const available = BigInt(p.amountMinor) - already;
+      return BigInt(values.amount ?? "0") > available ? `Refund amount is more than the remaining refundable amount (${available} minor units).` : null;
+    },
+    build: ({ values, merchant, now, seq, base }) => {
+      const p = base.payments.find((x) => x.id === values.paymentId);
+      const cur = p?.currency ?? merchant.currencies[0] ?? "GBP";
+      const captured = BigInt(p?.amountMinor ?? "0");
+      return {
+        id: `re_${(values.paymentId ?? "").slice(3, 19)}_n${seq}`, status: "REQUESTED", requested: true, event: "Refund requested",
+        fields: {
+          caseType: "REFUND", paymentId: values.paymentId ?? "", merchant: merchant.displayName,
+          captured: money(captured, cur), refunded: money(0, cur), availableToRefund: money(captured, cur), amount: money(values.amount ?? "0", cur),
+          reasonCode: values.reason ?? "", deadline: iso(now + 7 * DAY).slice(0, 10), pspStatus: "Not submitted", ledgerNote: "Ledger adjustments posted by BC-05 (not connected)",
+        },
+      };
+    },
+  },
 };
 
 // ---------------------------------------------------------------- ZP-BRW-009
@@ -430,7 +466,30 @@ const developerHub: ScreenDef = {
     { label: "Webhooks failing", value: String(rows.filter((r) => r.fields.kind === "Webhook endpoint" && r.status === "FAILING").length) },
     { label: "Reports", value: String(rows.filter((r) => r.fields.kind === "Report").length) },
   ],
-  actions: {},
+  actions: {
+    send_test: { label: "Send test event", from: ["ACTIVE", "FAILING"], to: "ACTIVE", deciders: ["MDEV", "MOWN", "MOPS"], separation: false, reasonRequired: false, stepUp: false, quiet: true,
+      guard: (r) => (r.fields.kind === "Webhook endpoint" ? null : "Only webhook endpoints receive test events."),
+      source: "Test event (TEST fixture): recorded as delivered; nothing is sent over the internet." },
+    disable: { label: "Disable endpoint", from: ["ACTIVE", "FAILING"], to: "DISABLED", deciders: ["MDEV", "MOWN", "MOPS"], separation: false, reasonRequired: false, stepUp: false, quiet: true,
+      guard: (r) => (r.fields.kind === "Webhook endpoint" ? null : "Only webhook endpoints can be disabled here."), source: "Developer Hub (TEST fixture)" },
+    enable: { label: "Enable endpoint", from: ["DISABLED"], to: "ACTIVE", deciders: ["MDEV", "MOWN", "MOPS"], separation: false, reasonRequired: false, stepUp: false, quiet: true,
+      source: "Developer Hub (TEST fixture)" },
+  },
+  create: {
+    label: "Add webhook endpoint", deciders: ["MDEV", "MOWN", "MOPS"],
+    source: "Webhook endpoint (TEST fixture): must be HTTPS; nothing is delivered over the internet.",
+    fields: [
+      { key: "url", label: "Endpoint URL", type: "text", required: true, hint: "Must start with https://" },
+      { key: "name", label: "Description", type: "text", required: true },
+      { key: "events", label: "Events to send", type: "select", required: true, options: ["payment.captured, payment.failed", "refund.succeeded", "All payment events"] },
+    ],
+    check: ({ values }) => (/^https:\/\/[^\s/$.?#][^\s]{2,190}$/i.test(values.url ?? "") ? null : "The endpoint must be an https:// address."),
+    build: ({ values, merchant, seq }) => ({
+      id: `whe_${merchant.id.slice(4)}_n${seq}`, status: "ACTIVE", requested: false, event: "Endpoint added (HTTPS)",
+      fields: { kind: "Webhook endpoint", merchant: merchant.displayName, name: values.name ?? "", value: values.url ?? "",
+        scopes: (values.events ?? "").split(",").map((x) => x.trim()).filter(Boolean), expires: "—", apiVersion: "2026-11-01" },
+    }),
+  },
 };
 
 // ---------------------------------------------------------------- ZP-BRW-014
@@ -499,6 +558,14 @@ const requirements: ScreenDef = {
 };
 
 // ------------------------------------------------- ZP-COM-001 … 006 (Stripe parity)
+// Creates and actions below change in-memory TEST fixtures only and are audited;
+// nothing reaches a PSP or a billing service, and no money moves (ADR 0003).
+const COMMERCE: Persona[] = ["MOPS", "MFIN", "POR"];
+const routine = (label: string, from: string[], to: string, extra: Partial<ActionRule> = {}): ActionRule =>
+  ({ label, from, to, deciders: COMMERCE, separation: false, reasonRequired: false, stepUp: false, quiet: true, source: "Customers & Billing (TEST fixture)", ...extra });
+const curOf = (m: Merchant) => m.currencies[0] ?? "GBP";
+const maskEmail = (email: string) => `${email.slice(0, 1).toLowerCase()}••••@${(email.split("@")[1] ?? "").toLowerCase()}`;
+const COUNTRIES = ["United Kingdom", "Germany", "France", "Ireland", "Netherlands", "Spain", "United States"];
 // Customers, products, payment links, subscriptions, invoices and tax rates:
 // the Stripe dashboard areas that the §07 rail does not cover. Read-only
 // fixtures until a billing service owns them (OPEN_QUESTIONS: Zoiko Pay vs
@@ -539,6 +606,20 @@ const customers: ScreenDef = {
     { label: "Delinquent", value: count(rows, "DELINQUENT") },
   ],
   actions: {},
+  create: {
+    label: "Add customer", deciders: COMMERCE, source: "Customers (TEST fixture): the email is stored masked.",
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "email", label: "Email", type: "email", required: true, hint: "Stored masked, like every customer email." },
+      { key: "country", label: "Country", type: "select", options: COUNTRIES },
+      { key: "note", label: "Description", type: "text" },
+    ],
+    build: ({ values, merchant, now, seq }) => ({
+      id: `cus_${merchant.id.slice(4)}_n${seq}`, status: "ACTIVE", requested: false, event: "Customer created",
+      fields: { name: values.name ?? "", email: maskEmail(values.email ?? ""), merchant: merchant.displayName, country: values.country || country(merchant.legalEntityId),
+        currency: curOf(merchant), payments: 0, totalSpent: money(0, curOf(merchant)), created: iso(now).slice(0, 10), note: values.note || "—" },
+    }),
+  },
 };
 
 const catalogue: ScreenDef = {
@@ -560,7 +641,25 @@ const catalogue: ScreenDef = {
     { label: "Active", value: count(rows, "ACTIVE") },
     { label: "Archived", value: count(rows, "ARCHIVED") },
   ],
-  actions: {},
+  actions: {
+    archive: routine("Archive product", ["ACTIVE"], "ARCHIVED"),
+    unarchive: routine("Unarchive", ["ARCHIVED"], "ACTIVE"),
+  },
+  create: {
+    label: "Create product", deciders: COMMERCE, source: "Product catalogue (TEST fixture)",
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "price", label: "Price", type: "money", required: true },
+      { key: "billing", label: "Billing", type: "select", required: true, options: ["One-off", "Recurring · monthly", "Recurring · yearly"] },
+      { key: "taxCode", label: "Tax code", type: "select", options: ["txcd_10103001 (SaaS)", "txcd_99999999 (General goods)", "txcd_10202000 (Downloadable software)"] },
+    ],
+    build: ({ values, merchant, now, seq }) => ({
+      id: `prod_${merchant.id.slice(4)}_n${seq}`, status: "ACTIVE", requested: false, event: "Product created",
+      fields: { name: values.name ?? "", merchant: merchant.displayName, price: money(values.price ?? "0", curOf(merchant)),
+        pricing: values.billing === "One-off" ? "1 price (one-off)" : "1 price (recurring)", billing: values.billing ?? "",
+        taxCode: values.taxCode || "txcd_99999999 (General goods)", created: iso(now).slice(0, 10) },
+    }),
+  },
 };
 
 const paymentLinks: ScreenDef = {
@@ -583,7 +682,22 @@ const paymentLinks: ScreenDef = {
     { label: "Active", value: count(rows, "ACTIVE") },
     { label: "Deactivated", value: count(rows, "DEACTIVATED") },
   ],
-  actions: {},
+  actions: {
+    deactivate: routine("Deactivate link", ["ACTIVE"], "DEACTIVATED"),
+    activate: routine("Activate link", ["DEACTIVATED"], "ACTIVE"),
+  },
+  create: {
+    label: "Create payment link", deciders: COMMERCE, source: "Payment links (TEST fixture): the link is not reachable from the internet.",
+    fields: [
+      { key: "product", label: "Product", type: "text", required: true },
+      { key: "price", label: "Price", type: "money", required: true },
+    ],
+    build: ({ values, merchant, now, seq }) => ({
+      id: `plink_${merchant.id.slice(4)}_n${seq}`, status: "ACTIVE", requested: false, event: "Payment link created",
+      fields: { url: `https://pay.zoiko.test/l/${merchant.id.slice(4, 10)}n${seq}`, product: values.product ?? "", merchant: merchant.displayName,
+        price: money(values.price ?? "0", curOf(merchant)), payments: 0, collected: money(0, curOf(merchant)), created: iso(now).slice(0, 10) },
+    }),
+  },
 };
 
 const subscriptions: ScreenDef = {
@@ -611,7 +725,30 @@ const subscriptions: ScreenDef = {
     { label: "Past due", value: count(rows, "PAST_DUE") },
     { label: "Canceled", value: count(rows, "CANCELED") },
   ],
-  actions: {},
+  actions: {
+    cancel: routine("Cancel subscription", ["ACTIVE", "TRIALING", "PAST_DUE"], "CANCELED", { reasonRequired: true,
+      effect: (f) => ({ ...f, currentPeriodEnd: "—", note: "Canceled; no further invoices" }) }),
+  },
+  create: {
+    label: "Create subscription", deciders: COMMERCE, source: "Subscriptions (TEST fixture): no card is charged.",
+    fields: [
+      { key: "customer", label: "Customer", type: "text", required: true },
+      { key: "product", label: "Product", type: "text", required: true },
+      { key: "amount", label: "Amount per interval", type: "money", required: true },
+      { key: "interval", label: "Interval", type: "select", required: true, options: ["Monthly", "Yearly"] },
+      { key: "trialDays", label: "Free trial (days)", type: "number" },
+    ],
+    build: ({ values, merchant, now, seq }) => {
+      const trial = Number(values.trialDays || "0");
+      const next = now + (trial > 0 ? trial : values.interval === "Yearly" ? 365 : 30) * DAY;
+      return {
+        id: `sub_${merchant.id.slice(4)}_n${seq}`, status: trial > 0 ? "TRIALING" : "ACTIVE", requested: false, event: trial > 0 ? "Trial started" : "Subscription started",
+        fields: { customer: values.customer ?? "", product: values.product ?? "", merchant: merchant.displayName, amount: money(values.amount ?? "0", curOf(merchant)),
+          interval: values.interval ?? "", started: iso(now).slice(0, 10), currentPeriodEnd: iso(next).slice(0, 10), collection: "Charge automatically",
+          note: trial > 0 ? `Trial ends in ${trial} days` : "—" },
+      };
+    },
+  },
 };
 
 const invoices: ScreenDef = {
@@ -637,7 +774,28 @@ const invoices: ScreenDef = {
     { label: "Draft", value: count(rows, "DRAFT") },
     { label: "Void / uncollectible", value: count(rows, "VOID", "UNCOLLECTIBLE") },
   ],
-  actions: {},
+  actions: {
+    finalize: routine("Finalise and send", ["DRAFT"], "OPEN"),
+    mark_paid: routine("Mark as paid", ["OPEN"], "PAID", { reasonRequired: true, source: "Records a payment received outside the platform (TEST fixture)",
+      effect: (f) => ({ ...f, amountPaid: f.amountDue ?? null }) }),
+    void: routine("Void invoice", ["OPEN"], "VOID", { reasonRequired: true }),
+    mark_uncollectible: routine("Mark uncollectible", ["OPEN"], "UNCOLLECTIBLE", { reasonRequired: true }),
+  },
+  create: {
+    label: "Create invoice", deciders: COMMERCE, source: "Invoices (TEST fixture): starts as a draft; finalise it to send. Nothing is emailed.",
+    fields: [
+      { key: "customer", label: "Customer", type: "text", required: true },
+      { key: "email", label: "Customer email", type: "email", required: true },
+      { key: "amountDue", label: "Amount due", type: "money", required: true },
+      { key: "dueDate", label: "Due date", type: "date", required: true },
+    ],
+    build: ({ values, merchant, seq }) => ({
+      id: `in_${merchant.id.slice(4)}_n${seq}`, status: "DRAFT", requested: false, event: "Draft created",
+      fields: { number: `${merchant.id.slice(4, 8).toUpperCase()}-N${String(seq).padStart(3, "0")}`, customer: values.customer ?? "", email: maskEmail(values.email ?? ""),
+        merchant: merchant.displayName, amountDue: money(values.amountDue ?? "0", curOf(merchant)), amountPaid: money(0, curOf(merchant)), issued: "—",
+        dueDate: values.dueDate ?? "", source: "One-off invoice" },
+    }),
+  },
 };
 
 const taxRates: ScreenDef = {
@@ -657,11 +815,16 @@ const taxRates: ScreenDef = {
     { label: "Active rates", value: count(rows, "ACTIVE") },
     { label: "Archived", value: count(rows, "ARCHIVED") },
   ],
-  actions: {},
+  actions: {
+    archive: routine("Archive tax rate", ["ACTIVE"], "ARCHIVED", { deciders: ["MFIN", "POR"] }),
+    unarchive: routine("Unarchive", ["ARCHIVED"], "ACTIVE", { deciders: ["MFIN", "POR"] }),
+  },
 };
 
 export const SCREEN_DEFS: ScreenDef[] = [
   requirements, merchantApplications, capabilities, routing, connectors, refunds, settlement, payouts, investigations, regulatory, developerHub, releases,
   customers, catalogue, paymentLinks, subscriptions, invoices, taxRates,
   ...FINANCE_SCREENS,
+  ...BILLING_SCREENS,
+  ...DEVELOPER_SCREENS,
 ];

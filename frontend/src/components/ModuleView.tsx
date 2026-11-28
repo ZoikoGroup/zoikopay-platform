@@ -2,7 +2,7 @@ import { Info, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { humanize } from "../services/format";
-import { MODULES, SERVER_MODULES } from "../screens/parity";
+import { MODULES, SERVER_FINANCE, SERVER_MODULES } from "../screens/parity";
 import type { FieldValue } from "../types/api";
 import { ApiKeysPanel, CapitalOffer, CardVisuals, CheckoutPreview, LocalActionButtons, PricingPreview, SigmaBox, useDemoStatus } from "./DemoExtras";
 import { CreateButton, CreateDialog, useLocalDrafts } from "./LocalDrafts";
@@ -138,10 +138,11 @@ export function ParityScreen({ id }: { id: string }) {
     <div className="stack" style={{ gap: "var(--s-4)" }}>
       <div className="banner" data-tone="dashed" role="note">
         <Info size={16} aria-hidden="true" />
-        <span><strong>TEST records from the console server.</strong> {mod.intent} Requests and approvals are checked and audited by the server; nothing reaches a bank or provider and no money moves. Money requests need a second person to approve them with their password.</span>
+        <span><strong>TEST records from the console server.</strong> {mod.intent} Everything you create or change is checked and audited by the server; nothing reaches a bank, provider or billing service and no money moves.{SERVER_FINANCE.has(id) ? " Money requests need a second person to approve them with their password." : ""}</span>
       </div>
       {mod.extra === "sigma" && <SigmaBox />}
       {mod.extra === "capital" && <CapitalOffer status="OFFERED" />}
+      {mod.extra === "pricing" && <PricingPreview />}
       <ScreenView screenId={id} />
     </div>
   );

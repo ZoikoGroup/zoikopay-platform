@@ -4,7 +4,7 @@
  * Persona codes are the BR's own; see OPEN_QUESTIONS Q12 for the mapping to
  * the 02-02 codes the backend enforces.
  */
-import { MODULES, SERVER_MODULES } from "../screens/parity";
+import { MODULES, SERVER_DEVELOPERS, SERVER_FINANCE, SERVER_MODULES } from "../screens/parity";
 
 export interface ScreenSpec {
   id: string;
@@ -58,6 +58,6 @@ export const SCREENS: Record<string, ScreenSpec> = {
     intent: "Tax rates per jurisdiction applied to products and invoices. Fixture table, not tax advice." },
   // Stripe areas with no backend API yet (frontend preview; local drafts only). See screens/parity.ts.
   ...Object.fromEntries(Object.values(MODULES).map((m) => [m.id, SERVER_MODULES.has(m.id)
-    ? { id: m.id, title: m.title, personas: "PFIN, MFIN, PRECON", tier: "Stripe parity / TEST fixtures", intent: m.intent }
+    ? { id: m.id, title: m.title, personas: SERVER_FINANCE.has(m.id) ? "PFIN, MFIN, PRECON" : SERVER_DEVELOPERS.has(m.id) ? "MDEV, MOWN, MOPS" : "MOPS, MFIN, POR", tier: "Stripe parity / TEST fixtures", intent: m.intent }
     : { id: m.id, title: m.title, personas: "Frontend preview", tier: "Stripe parity / not connected", intent: m.intent }])),
 };

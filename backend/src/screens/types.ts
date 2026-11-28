@@ -51,6 +51,8 @@ export interface ActionRule {
   source: string;
   /** Field changes that follow from the decision (e.g. a gate passing). */
   effect?: (fields: ScreenRecord["fields"]) => ScreenRecord["fields"];
+  /** A routine action (archive, pause, …): never a notification or a "next step" prompt. */
+  quiet?: boolean;
 }
 
 /** One input on a "create" form. Validated on the server; the UI only renders it. */
@@ -58,7 +60,7 @@ export interface CreateField {
   key: string;
   label: string;
   /** money: a positive amount in major units ("12.50"), converted exactly to minor units. */
-  type: "text" | "money" | "number" | "select" | "date";
+  type: "text" | "email" | "money" | "number" | "select" | "date";
   options?: string[];
   required?: boolean;
   hint?: string;
@@ -75,8 +77,13 @@ export interface CreateRule {
   deciders: Persona[];
   fields: CreateField[];
   source: string;
+  /**
+   * Extra precondition checked on the server before anything is created (for
+   * example "amount <= remaining refundable"). Returns a refusal message, or null.
+   */
+  check?: (input: { values: Record<string, string>; merchant: Merchant; base: FixtureDataset; rows: ScreenRecord[] }) => string | null;
   /** Builds the record from validated values. Money values arrive as minor-unit strings. */
-  build: (input: { values: Record<string, string>; merchant: Merchant; now: number; seq: number }) => {
+  build: (input: { values: Record<string, string>; merchant: Merchant; now: number; seq: number; base: FixtureDataset }) => {
     id: string;
     status: string;
     fields: ScreenRecord["fields"];

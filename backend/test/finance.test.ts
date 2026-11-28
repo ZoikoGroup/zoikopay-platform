@@ -96,3 +96,41 @@ describe("Stripe-parity finance screens (TEST fixtures)", () => {
     expect(asRecon.actions.find((a) => a.name === "close_period")?.allowed).toBe(false);
   });
 });
+
+describe("refund from a payment (TEST fixtures)", () => {
+  type Pay = { id: string; merchantId: string; amountMinor: string; status: string; currency: string };
+  it("raises a refund case that an independent reviewer approves, never above the refundable amount", async () => {
+    const t = setup();
+    const ops = t.loginAs("merchant.ops");
+    const pays = (await request(t.app).get("/api/v1/payments?pageSize=100").set("Cookie", ops)).body.data.items as Pay[];
+    const withCases = new Set(t.services.screens.rawRows("ZP-BRW-008").map((r) => r.fields.paymentId));
+    const p = pays.find((x) => x.status === "SUCCEEDED" && !withCases.has(x.id))!; // no earlier refund on it
+    const major = (minor: bigint) => `${minor / 100n}.${String(minor % 100n).padStart(2, "0")}`;
+    const full = BigInt(p.amountMinor);
+
+    const tooMuch = await t.create(ops, "ZP-BRW-008", { merchantId: p.merchantId, values: { paymentId: p.id, amount: major(full + 1n), reason: "duplicate" } });
+    expect(tooMuch.status).toBe(409);
+
+    const made = await t.create(ops, "ZP-BRW-008", { merchantId: p.merchantId, values: { paymentId: p.id, amount: major(full), reason: "requested_by_customer" } });
+    expect(made.status).toBe(201);
+    const r = made.body.data as Row;
+    expect(r.status).toBe("REQUESTED");
+    expect(r.fields.amount).toEqual({ minor: p.amountMinor, currency: p.currency });
+
+    // The full amount is now requested, so nothing more can be refunded.
+    const again = await t.create(ops, "ZP-BRW-008", { merchantId: p.merchantId, values: { paymentId: p.id, amount: "0.01", reason: "duplicate" } });
+    expect(again.status).toBe(409);
+
+    // Payment of another merchant, or a payment that did not succeed, is refused.
+    const other = pays.find((x) => x.merchantId !== p.merchantId);
+    if (other) expect((await t.create(ops, "ZP-BRW-008", { merchantId: p.merchantId, values: { paymentId: other.id, amount: "1.00", reason: "duplicate" } })).status).toBe(409);
+    const failed = pays.find((x) => x.merchantId === p.merchantId && x.status !== "SUCCEEDED");
+    if (failed) expect((await t.create(ops, "ZP-BRW-008", { merchantId: p.merchantId, values: { paymentId: failed.id, amount: "1.00", reason: "duplicate" } })).status).toBe(409);
+
+    // The Pay Operations reviewer approves with a fresh password.
+    const reviewer = await t.signedInWithStepUp("ops.agent");
+    const done = await reviewer.post(`/api/v1/screens/ZP-BRW-008/records/${r.id}/actions/approve`).set("Origin", ORIGIN).send({ version: r.version });
+    expect(done.status).toBe(200);
+    expect(done.body.data.status).toBe("APPROVED");
+  });
+});

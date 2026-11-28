@@ -17,7 +17,7 @@ import { EmptyState, ErrorState, SourceBadge, StaleIndicator, TableSkeleton } fr
 import { StatusBadge, StatusGlyph } from "./StatusBadge";
 
 /** Affirmative actions get the primary (white) button; refusals and holds stay outlined. */
-const PRIMARY_ACTIONS = new Set(["approve", "activate", "certify", "close", "promote", "go", "resolve", "approve_change", "submit"]);
+const PRIMARY_ACTIONS = new Set(["approve", "activate", "certify", "close", "promote", "go", "resolve", "approve_change", "submit", "finalize", "unarchive", "resume"]);
 
 const isMoney =(v: FieldValue): v is MoneyValue => !!v && typeof v === "object" && !Array.isArray(v) && "minor" in v && "currency" in v;
 
@@ -249,7 +249,7 @@ export function ScreenView({ screenId, initialQuery = "" }: { screenId: string; 
               </thead>
               <tbody>
                 {shown.map((r) => {
-                  const actionable = r.actions.filter((a) => a.allowed);
+                  const actionable = r.actions.filter((a) => a.allowed && !a.quiet);
                   return (
                     <tr key={r.id} className="clickable" aria-selected={r.id === open} onClick={() => setOpen(r.id)}>
                       <td><button className="btn btn-sm btn-ghost mono" style={{ padding: 0 }} onClick={(e) => { e.stopPropagation(); setOpen(r.id); }}>{r.id}</button></td>
